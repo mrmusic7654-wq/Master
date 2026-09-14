@@ -73,9 +73,15 @@ class FolderRepositoryImpl @Inject constructor(
 
     override suspend fun deleteFolder(folderId: Long, reassignVideosTo: Long?) {
         db.withTransaction {
-            if (reassignVideosTo != null) {
-                // handled by FK SET NULL currently; explicit reassign unsupported at schema v1
-            }
+            // Videos must keep their permanent IDs; only the folder link changes.
+            // null moves them out of every folder (the FK on folders is SET NULL,
+            // but we write the target explicitly so the choice is honoured).
+            db.videoDao().reassignFolder(
+                fromFolderId = folderId,
+                targetFolderId = reassignVideosTo,
+                updatedAtEpochMs = Instant.now().toEpochMilli(),
+            )
+            // Child folders become top-level (folders.parentFolderId is SET NULL).
             dao().delete(folderId)
         }
     }
@@ -144,6 +150,9 @@ class ActivityRepositoryImpl @Inject constructor(
 
     override fun observeByType(type: ActivityType?): Flow<List<ActivityLogEntry>> =
         dao().observeFiltered(type?.name, 500).map { list -> list.map { it.toDomain() } }
+
+    override fun observeForVideo(videoId: String, limit: Int): Flow<List<ActivityLogEntry>> =
+        dao().observeForVideo(videoId, limit.coerceIn(1, 500)).map { list -> list.map { it.toDomain() } }
 
     override suspend fun getRecentSnapshot(limit: Int): List<ActivityLogEntry> =
         dao().recentSnapshot(limit.coerceIn(1, 500)).map { it.toDomain() }

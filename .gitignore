@@ -15,6 +15,12 @@ captures/
 .DS_Store
 .kotlin/
 
+# Native build outputs (produced by scripts/build-tdlib.sh, never committed)
+telegram/src/main/jniLibs/
+
 # Local-only diagnostics / scratch
 *.hprof
 /diagnostics/
+
+# Python bytecode from the verification tools
+__pycache__/

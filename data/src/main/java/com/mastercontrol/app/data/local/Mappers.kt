@@ -8,18 +8,13 @@ import com.mastercontrol.app.core.database.entity.TelegramMappingEntity
 import com.mastercontrol.app.core.database.entity.UploadTaskEntity
 import com.mastercontrol.app.core.database.entity.VideoEntity
 import com.mastercontrol.app.domain.model.ActivityLogEntry
-import com.mastercontrol.app.domain.model.ActivityType
 import com.mastercontrol.app.domain.model.Category
-import com.mastercontrol.app.domain.model.ChannelKind
 import com.mastercontrol.app.domain.model.ChannelPermissions
 import com.mastercontrol.app.domain.model.Folder
-import com.mastercontrol.app.domain.model.MappingStatus
 import com.mastercontrol.app.domain.model.StorageChannel
 import com.mastercontrol.app.domain.model.TelegramMapping
 import com.mastercontrol.app.domain.model.UploadTask
-import com.mastercontrol.app.domain.model.UploadTaskState
 import com.mastercontrol.app.domain.model.Video
-import com.mastercontrol.app.domain.model.VideoStatus
 import java.time.Instant
 
 // ---- entity -> domain ------------------------------------------------------

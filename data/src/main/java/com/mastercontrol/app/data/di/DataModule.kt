@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.mastercontrol.app.core.database.database.MasterControlDatabase
 import com.mastercontrol.app.core.datastore.dataStoreOf
+import com.mastercontrol.app.data.documents.SafDocumentStore
 import com.mastercontrol.app.data.media.AndroidMediaToolkit
 import com.mastercontrol.app.data.repository.ActivityRepositoryImpl
 import com.mastercontrol.app.data.repository.AppLockRepositoryImpl
@@ -15,6 +16,7 @@ import com.mastercontrol.app.data.repository.UploadTaskRepositoryImpl
 import com.mastercontrol.app.data.repository.VideoRepositoryImpl
 import com.mastercontrol.app.data.id.RoomVideoIdAllocator
 import com.mastercontrol.app.domain.id.VideoIdAllocator
+import com.mastercontrol.app.domain.port.DocumentStore
 import com.mastercontrol.app.domain.port.MediaToolkit
 import com.mastercontrol.app.domain.repository.ActivityRepository
 import com.mastercontrol.app.domain.repository.AppLockRepository
@@ -83,6 +85,9 @@ abstract class RepositoryBindingsModule {
 
     @Binds
     abstract fun bindMediaToolkit(impl: AndroidMediaToolkit): MediaToolkit
+
+    @Binds
+    abstract fun bindDocumentStore(impl: SafDocumentStore): DocumentStore
 
     @Binds
     abstract fun bindVideoIdAllocator(impl: RoomVideoIdAllocator): VideoIdAllocator

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Notification channel for durable media uploads (see UploadNotifications). -->
+    <string name="mc_channel_uploads_name">Uploads</string>
+    <string name="mc_channel_uploads_description">Master Control media upload progress</string>
+</resources>

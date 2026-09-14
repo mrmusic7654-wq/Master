@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Base window theme. All in-app styling is Material 3 through Compose; this
+        only sets the pre-composition window background and edge-to-edge bars.
+        No Material Components (com.google.android.material) dependency is used.
+    -->
+    <style name="Theme.MasterControl" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/mc_window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

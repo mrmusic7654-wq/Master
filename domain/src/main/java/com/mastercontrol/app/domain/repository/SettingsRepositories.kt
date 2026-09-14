@@ -33,7 +33,17 @@ interface AppLockRepository {
 
     fun observeLockMode(): Flow<AppLockMode>
 
+    /** Stores a Master Control PIN and switches the lock to [AppLockMode.PIN]. */
     suspend fun setPin(pin: String)
+
+    /**
+     * Switches the lock to a device-unlock based mode.
+     *
+     * BIOMETRIC and DEVICE_CREDENTIAL delegate to the platform prompt, so no
+     * secret is stored by Master Control for them. PIN mode requires [setPin].
+     */
+    suspend fun setMode(mode: AppLockMode)
+
     suspend fun disable()
     suspend fun verifyPin(pin: String): Boolean
 }

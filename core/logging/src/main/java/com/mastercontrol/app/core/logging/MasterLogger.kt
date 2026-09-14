@@ -72,7 +72,7 @@ class MasterLogger @Inject constructor(
 
     /** Registers a value that must never appear in logs (e.g. the api hash). */
     @Synchronized
-    fun registerSecret(value: String) {
+    override fun registerSecret(value: String) {
         if (value.length >= 8) redactor.add(value)
     }
 

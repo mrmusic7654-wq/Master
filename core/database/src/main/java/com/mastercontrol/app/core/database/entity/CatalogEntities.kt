@@ -122,3 +122,20 @@ data class VideoIdCounterEntity(
     @PrimaryKey val id: Int = 1,
     @ColumnInfo(name = "nextSequence") val nextSequence: Long = 0L,
 )
+
+/**
+ * Projection for grouped counts (videos per category / per folder).
+ *
+ * Room maps the aliased columns of the aggregate query onto this POJO; it is
+ * never persisted, so it is not part of the [androidx.room.Database] entity list.
+ */
+data class GroupedCount(
+    val ownerId: Long,
+    val count: Int,
+)
+
+/** Projection for grouped byte totals (Telegram bytes stored per channel). */
+data class GroupedSum(
+    val ownerId: Long,
+    val total: Long,
+)

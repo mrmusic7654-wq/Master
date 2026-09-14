@@ -10,7 +10,6 @@ import com.mastercontrol.app.telegram.tdlib.core.TdAuthManager
 import com.mastercontrol.app.telegram.tdlib.core.TdChatManager
 import com.mastercontrol.app.telegram.tdlib.core.TdClientCore
 import com.mastercontrol.app.telegram.tdlib.core.TdMessageManager
-import com.mastercontrol.app.telegram.tdlib.jni.TdJsonJni
 import com.mastercontrol.app.telegram.tdlib.jni.TdNativeLogSink
 import com.mastercontrol.app.telegram.tdlib.json.TdRequests
 import java.io.File

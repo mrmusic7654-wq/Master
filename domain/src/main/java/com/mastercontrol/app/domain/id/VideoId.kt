@@ -20,8 +20,8 @@ object VideoId {
     }
 
     /** Returns the numeric sequence encoded in an existing Video ID, or null. */
-    fun parseSequence(videoId: String): Long? =
-        PATTERN.matchEntire(videoId)?.groupValues?.get(1)?.toLongOrNull()
+    fun parseSequence(videoId: String?): Long? =
+        videoId?.let { PATTERN.matchEntire(it)?.groupValues?.get(1)?.toLongOrNull() }
 
     fun isValid(videoId: String): Boolean = PATTERN.matches(videoId)
 

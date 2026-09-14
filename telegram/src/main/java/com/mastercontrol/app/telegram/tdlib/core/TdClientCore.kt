@@ -5,7 +5,6 @@ import com.mastercontrol.app.core.logging.Tags
 import com.mastercontrol.app.domain.error.AppError
 import com.mastercontrol.app.telegram.tdlib.jni.TdJsonJni
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -17,7 +16,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**

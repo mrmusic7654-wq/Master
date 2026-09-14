@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- TDLib talks to Telegram directly; Master Control has no server of its own. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Upload rules (Wi-Fi only) and the connectivity monitor need network state. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Durable uploads run in a WorkManager foreground service of type dataSync. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Upload progress notification (runtime-granted on Android 13+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Keeps an in-flight upload alive while the screen is off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Optional app lock with fingerprint/face. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <uses-feature android:name="android.hardware.fingerprint" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:name=".MasterControlApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MasterControl"
+        android:enableOnBackInvokedCallback="true"
+        android:localeConfig="@xml/locales_config"
+        tools:targetApi="33">
+
+        <!--
+            Cloud/auto backup is disabled on purpose: this app holds a Telegram
+            session, Keystore-encrypted API credentials and a catalog of media
+            locations. Operators move the catalog with the in-app JSON export
+            (Settings → Catalog backup), which contains no secrets. See SECURITY.md.
+        -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.MasterControl">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            WorkManager must use the Hilt worker factory because the upload,
+            import and reconciliation workers are @HiltWorker classes. The
+            default on-demand initializer is removed so Configuration.Provider
+            in MasterControlApplication is authoritative.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!--
+            WorkManager runs foreground uploads through SystemForegroundService.
+            The type is declared here (merged into the library's entry) so the
+            dataSync foreground service is valid on Android 14+.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+    </application>
+
+</manifest>

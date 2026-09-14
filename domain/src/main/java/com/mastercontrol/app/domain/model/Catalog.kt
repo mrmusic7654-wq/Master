@@ -99,3 +99,16 @@ data class Folder(
     val createdAt: Instant,
     val updatedAt: Instant,
 )
+
+/** Library query used by the search/filter/sort bar. */
+data class LibraryQuery(
+    val text: String = "",
+    val categoryId: Long? = null,
+    val folderId: Long? = null,
+    val status: VideoStatus? = null,
+    val tag: String? = null,
+    val sort: LibrarySort = LibrarySort.DATE_ADDED_DESC,
+) {
+    val hasActiveFilter: Boolean
+        get() = text.isNotBlank() || categoryId != null || folderId != null || status != null || tag != null
+}

@@ -2,7 +2,6 @@ package com.mastercontrol.app.domain.util
 
 import com.mastercontrol.app.domain.util.ValidationResult.Error
 import com.mastercontrol.app.domain.util.ValidationResult.Success
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

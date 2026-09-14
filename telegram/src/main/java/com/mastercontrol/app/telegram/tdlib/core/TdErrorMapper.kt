@@ -2,8 +2,6 @@ package com.mastercontrol.app.telegram.tdlib.core
 
 import com.mastercontrol.app.domain.error.AppError
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 
 /**
  * Maps TDLib `error` objects to structured [AppError] types.

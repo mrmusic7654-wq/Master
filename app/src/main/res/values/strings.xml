@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Master Control</string>
+    <string name="lock_title">Master Control is locked</string>
+    <string name="lock_subtitle_pin">Enter your PIN to open the catalog</string>
+    <string name="lock_subtitle_biometric">Unlock with your device security</string>
+    <string name="lock_prompt_title">Unlock Master Control</string>
+    <string name="lock_prompt_subtitle">Confirm your identity to open the media catalog</string>
+    <string name="lock_prompt_negative">Use PIN instead</string>
+</resources>

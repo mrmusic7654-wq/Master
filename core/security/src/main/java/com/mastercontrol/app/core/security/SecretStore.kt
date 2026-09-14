@@ -6,6 +6,7 @@ import android.util.Base64
 import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 object SecretAliases {
     const val TELEGRAM_API_HASH = "telegram_api_hash_v1"
@@ -21,7 +22,7 @@ object SecretAliases {
  */
 @Singleton
 class SecretStore @Inject constructor(
-    context: Context,
+    @ApplicationContext context: Context,
     private val cipher: AndroidKeyStoreCipher,
 ) {
     private val prefs: SharedPreferences =

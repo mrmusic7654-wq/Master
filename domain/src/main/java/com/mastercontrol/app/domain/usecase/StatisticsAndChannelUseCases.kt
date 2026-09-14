@@ -1,5 +1,6 @@
 package com.mastercontrol.app.domain.usecase
 
+import com.mastercontrol.app.domain.error.AppError
 import com.mastercontrol.app.domain.model.ActivityLogEntry
 import com.mastercontrol.app.domain.model.ActivityType
 import com.mastercontrol.app.domain.model.AuthorizationState
@@ -93,6 +94,13 @@ class SetDefaultChannelUseCase @Inject constructor(
     private val activityRepository: ActivityRepository,
 ) {
     suspend operator fun invoke(channelId: Long) {
+        val channel = channelRepository.getChannel(channelId)
+            ?: throw AppError.ChannelNotFoundError()
+        if (!channel.enabled) {
+            throw AppError.ValidationError(
+                "\"${channel.displayName}\" is disabled. Enable it before making it the default storage channel.",
+            )
+        }
         channelRepository.setDefaultChannel(channelId)
         activityRepository.add(
             ActivityLogEntry(
@@ -110,6 +118,40 @@ class RenameChannelUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(channelId: Long, localLabel: String?) =
         channelRepository.renameChannel(channelId, localLabel?.takeIf { it.isNotBlank() })
+}
+
+/**
+ * Enables or disables a storage channel for new uploads.
+ *
+ * Disabling never deletes media and never changes existing mappings; it only
+ * stops the channel from being chosen as an upload target. The default channel
+ * cannot be disabled while it is the default, because uploads would otherwise
+ * have nowhere honest to go.
+ */
+class SetChannelEnabledUseCase @Inject constructor(
+    private val channelRepository: TelegramChannelRepository,
+    private val activityRepository: ActivityRepository,
+) {
+    suspend operator fun invoke(channelId: Long, enabled: Boolean) {
+        val channel = channelRepository.getChannel(channelId)
+            ?: throw AppError.ChannelNotFoundError()
+        if (channel.enabled == enabled) return
+        if (!enabled && channel.isDefault) {
+            throw AppError.ValidationError(
+                "\"${channel.displayName}\" is the default storage channel. " +
+                    "Choose another default channel first, then disable this one.",
+            )
+        }
+        channelRepository.setChannelEnabled(channelId, enabled)
+        activityRepository.add(
+            ActivityLogEntry(
+                type = if (enabled) ActivityType.CHANNEL_ENABLED else ActivityType.CHANNEL_DISABLED,
+                message = "${channel.displayName} ${if (enabled) "enabled" else "disabled"} for uploads",
+                channelId = channelId,
+                createdAt = Instant.now(),
+            ),
+        )
+    }
 }
 
 /** Re-verifies live permissions and refreshes the stored row. */

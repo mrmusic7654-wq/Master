@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * ContentResolver-based video inspection, metadata extraction and thumbnail
@@ -27,7 +28,7 @@ import java.security.MessageDigest
  */
 @Singleton
 class AndroidMediaToolkit @Inject constructor(
-    context: Context,
+    @ApplicationContext context: Context,
 ) : MediaToolkit {
 
     private val appContext = context.applicationContext

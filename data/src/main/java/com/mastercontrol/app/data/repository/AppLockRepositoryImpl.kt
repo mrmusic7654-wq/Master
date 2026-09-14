@@ -47,6 +47,16 @@ class AppLockRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun setMode(mode: AppLockMode) {
+        if (mode == AppLockMode.PIN && secretStore.read(SecretAliases.APP_LOCK_PIN) == null) {
+            throw AppError.CredentialValidationError("Set a PIN before choosing PIN unlock.")
+        }
+        dataStore.edit {
+            it[Keys.ENABLED] = true
+            it[Keys.MODE] = mode.name
+        }
+    }
+
     override suspend fun disable() {
         dataStore.edit {
             it[Keys.ENABLED] = false
