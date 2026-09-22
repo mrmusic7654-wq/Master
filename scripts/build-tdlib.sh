@@ -168,11 +168,19 @@ for abi in "${ABIS[@]}"; do
       -DANDROID_PLATFORM="$ANDROID_PLATFORM" \
       -DTD_ANDROID_JSON=ON \
       "$TDLIB_DIR"
-    cmake --build . --target tdjson
+    # TDLib's target is normally `tdjson`; some Ninja/CMake combinations
+    # expose the shared library only through the default target set. Probe the
+    # generated build rather than failing with the opaque "unknown target"
+    # error seen on GitHub's runner.
+    if cmake --build . --target help 2>/dev/null | grep -Eq '(^|[[:space:]])tdjson([[:space:]]|$)'; then
+      cmake --build . --target tdjson
+    else
+      cmake --build .
+    fi
   ) || fail "TDLib build failed for $abi"
 
-  built="$abi_dir/td/libtdjson.so"
-  [[ -f "$built" ]] || fail "expected output not produced: $built"
+  built="$(find "$abi_dir" -type f -name 'libtdjson.so' -print -quit)"
+  [[ -n "$built" && -f "$built" ]] || fail "expected libtdjson.so was not produced under $abi_dir"
 
   dest_dir="$JNI_OUTPUT/$abi"
   mkdir -p "$dest_dir"

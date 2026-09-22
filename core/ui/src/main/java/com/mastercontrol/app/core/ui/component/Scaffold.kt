@@ -90,7 +90,7 @@ fun MasterControlScaffold(
                     }
                 }
             },
-            snackbarHost = { host -> snackbarHostState?.let { SnackbarHost(it) } },
+            snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
             floatingActionButton = floatingActionButton,
             containerColor = MaterialTheme.colorScheme.background,
         ) { padding ->

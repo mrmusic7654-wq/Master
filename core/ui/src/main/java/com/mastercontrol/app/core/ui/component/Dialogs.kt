@@ -1,5 +1,6 @@
 package com.mastercontrol.app.core.ui.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -259,4 +260,4 @@ fun McActionRow(
 }
 
 private fun Modifier.mcClickableIf(enabled: Boolean, onClick: () -> Unit): Modifier =
-    if (enabled) this.then(androidx.compose.foundation.clickable(onClick = onClick)) else this
+    if (enabled) clickable(onClick = onClick) else this
