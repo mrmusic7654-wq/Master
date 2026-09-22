@@ -60,6 +60,9 @@ jobs:
       - name: Structure, DI, imports, banned patterns, versions, icons
         run: python3 tools/verify/structure-check.py
 
+      - name: Compile-classpath audit (api vs implementation visibility)
+        run: python3 tools/verify/dependency-audit.py
+
       - name: Every declared dependency is documented
         run: ./scripts/check-third-party.sh
 
@@ -104,6 +107,10 @@ jobs:
     name: Unit tests & lint
     runs-on: ubuntu-latest
     needs: static
+    permissions:
+      contents: read
+      # Used only to comment the compiler-error digest back on the pull request.
+      pull-requests: write
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -127,10 +134,34 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Unit tests
-        run: ./gradlew --stacktrace test
+        run: |
+          set -o pipefail
+          ./gradlew --stacktrace test 2>&1 | tee gradle-test.log
 
       - name: Lint
-        run: ./gradlew --stacktrace lintDebug
+        run: |
+          set -o pipefail
+          ./gradlew --stacktrace lintDebug 2>&1 | tee gradle-lint.log
+
+      # Runner logs are not reachable from every environment; the digest puts the
+      # actual compiler output where a reviewer (or an agent) can read it.
+      - name: Post failure digest to the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### :x: \`Unit tests & lint\` — compiler/lint digest"
+            echo
+            echo '```'
+            cat gradle-*.log 2>/dev/null \
+              | grep -E "^e: |^w: |error:|FAILURE:|Caused by:|> Task .* FAILED|Execution failed|What went wrong|unresolved reference|cannot access|Duplicate|Kotlin could not" \
+              | head -150
+            echo '```'
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > digest.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file digest.md
 
       - name: Upload test & lint reports
         if: always()
@@ -151,6 +182,9 @@ jobs:
     name: Assemble debug & release
     runs-on: ubuntu-latest
     needs: static
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -174,7 +208,27 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Build APKs
-        run: ./gradlew --stacktrace :app:assembleDebug :app:assembleRelease
+        run: |
+          set -o pipefail
+          ./gradlew --stacktrace :app:assembleDebug :app:assembleRelease 2>&1 | tee gradle-assemble.log
+
+      - name: Post failure digest to the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### :x: \`Assemble debug & release\` — compiler digest"
+            echo
+            echo '```'
+            cat gradle-assemble.log 2>/dev/null \
+              | grep -E "^e: |error:|FAILURE:|Caused by:|> Task .* FAILED|Execution failed|What went wrong|unresolved reference|cannot access|Duplicate|AAPT|aapt2" \
+              | head -150
+            echo '```'
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > digest.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file digest.md
 
       - name: Verify the debug APK has no native libraries baked in from git
         run: |
@@ -247,6 +301,9 @@ jobs:
     needs: native-trigger
     if: needs.native-trigger.outputs.build-native == 'true'
     timeout-minutes: 180
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -278,7 +335,30 @@ jobs:
 
       - name: Build libtdjson.so for arm64-v8a, armeabi-v7a and x86_64
         run: |
-          ./scripts/build-tdlib.sh --include-x86-64
+          set -o pipefail
+          ./scripts/build-tdlib.sh --include-x86-64 2>&1 | tee tdlib-build.log
+
+      - name: Post failure digest to the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### :x: \`Build TDLib (native)\` — digest"
+            echo
+            echo '```'
+            grep -nE "error:|Error|FAILED|failed|CMake Error|ninja: build stopped|fatal|ERROR" tdlib-build.log 2>/dev/null | tail -80
+            echo '```'
+            echo
+            echo "Last 60 lines:"
+            echo
+            echo '```'
+            tail -60 tdlib-build.log 2>/dev/null
+            echo '```'
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > digest.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file digest.md
 
       - name: Show the build manifest
         run: cat telegram/src/main/jniLibs/BUILD-INFO.txt

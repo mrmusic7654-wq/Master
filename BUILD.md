@@ -145,26 +145,36 @@ CI, air-gapped machines) the project ships its own harness:
 tools/verify/run-offline-checks.sh
 ```
 
-Five steps: build the verification harness → syntax-check every Kotlin source with
+Six steps: build the verification harness → syntax-check every Kotlin source with
 the real Kotlin front-end → compile and execute the pure-JVM test suites
 (`:domain` and `:core:common`; files needing artifacts outside the Kotlin
 compiler distribution are excluded by an explicit list) → structural/DI/policy
-checks (`tools/verify/structure-check.py`) → dependency & license audit
+checks (`tools/verify/structure-check.py`) → compile-classpath audit
+(`tools/verify/dependency-audit.py`) → dependency & license audit
 (`./scripts/check-third-party.sh`). `tools/verify/README.md` documents the
 harness, its bootstrap and its limits. Individual pieces:
 
 ```bash
 python3 tools/verify/structure-check.py            # exit 1 on any violation
 python3 tools/verify/structure-check.py --fix-unused-imports
+python3 tools/verify/dependency-audit.py           # exit 1 if an import is not on a module's compile classpath
 ./scripts/check-third-party.sh                     # every dependency documented
 ```
 
-`structure-check.py` is not a substitute for `./gradlew build` — it does not type
-check Compose. It *does* catch the things that silently rot: unresolved imports
+Neither script is a substitute for `./gradlew build` — nothing offline type
+checks Compose. It *does* catch the things that silently rot: unresolved imports
 across module boundaries, missing Hilt bindings, unregistered modules, banned
 patterns (`TODO`, `FIXME`, `NotImplementedError`, "placeholder"), hard-coded
 dependency versions outside the version catalog, undocumented `Icons.*` usage and
-missing required files. Both scripts run in CI on every push and pull request.
+missing required files. `dependency-audit.py` models the part of Gradle's semantics that decides what a
+module may import: `api` dependencies are visible to consumers, `implementation`
+dependencies are not, so a `project(":x")` edge exposes `:x`'s own packages plus
+the closure of its `api` edges. It is the offline proxy for the
+"cannot access class / unresolved reference" failures that otherwise only appear
+in a real Gradle build — and it caught two of them (`:core:database` keeping Room
+private while `:data` called `withTransaction`; `core:ui` using
+`androidx.compose.animation` without declaring it). All three scripts run in CI on
+every push and pull request.
 
 ## 6. Continuous integration
 
@@ -172,7 +182,7 @@ missing required files. Both scripts run in CI on every push and pull request.
 
 | Job | Runs on | What it does |
 | --- | --- | --- |
-| `static` | every push/PR | `structure-check.py`, `check-third-party.sh`, `bash -n` on all scripts, Gradle wrapper checksum validation |
+| `static` | every push/PR | `structure-check.py`, `dependency-audit.py`, `check-third-party.sh`, `bash -n` on all scripts, Gradle wrapper checksum validation |
 | `unit-tests` | every push/PR | JDK 17 + SDK 35, `./gradlew test lintDebug` |
 | `assemble` | every push/PR | `./gradlew :app:assembleDebug :app:assembleRelease` |
 | `native-trigger` | every push/PR | diffs the change against the base and decides whether the native path is needed (always yes for nightly/manual runs) |
@@ -180,7 +190,10 @@ missing required files. Both scripts run in CI on every push and pull request.
 | `instrumented` | `workflow_dispatch` + nightly, after `native-tdlib` | x86_64 emulator (API 34), `connectedDebugAndroidTest` |
 
 The static job also asserts that no `local.properties`/`keystore.properties` and no
-32-hex string that looks like an `api_hash` were ever committed. Native and
+32-hex string that looks like an `api_hash` were ever committed. The Gradle jobs
+capture their output and, on failure, post a compiler-error digest as a comment on
+the pull request — runner logs are not reachable from every environment, so the
+actual `e: …` lines travel with the PR. Native and
 instrumented jobs are excluded from the per-PR path because a TDLib
 build dominates the runtime; the artifact from `native-tdlib` is what
 `instrumented` consumes, so nightly gives real on-device coverage without paying

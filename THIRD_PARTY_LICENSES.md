@@ -33,6 +33,7 @@ that check fails.
 | androidx.compose.ui (ui, ui-graphics, tooling, tooling-preview, ui-test-*) | BOM | Apache-2.0 | https://developer.android.com/jetpack/androidx/releases/compose-ui |
 | androidx.compose.runtime | BOM | Apache-2.0 | https://developer.android.com/jetpack/androidx/releases/compose-runtime |
 | androidx.compose.foundation | BOM | Apache-2.0 | https://developer.android.com/jetpack/androidx/releases/compose-foundation |
+| androidx.compose.animation (animation, animation-core) | BOM | Apache-2.0 | https://developer.android.com/jetpack/androidx/releases/compose-animation |
 | androidx.compose.material3 | BOM | Apache-2.0 | https://m3.material.io |
 | androidx.compose.material (material-icons-extended) | BOM | Apache-2.0 | https://fonts.google.com/icons (Material Symbols/Icons, Apache-2.0) |
 | androidx.core (core-ktx) | 1.13.1 | Apache-2.0 | https://developer.android.com/jetpack/androidx/releases/core |
@@ -82,11 +83,14 @@ rules, app-lock mode). Secrets never go here; they live in the Keystore-backed
 secret store.
 
 **androidx.navigation, androidx.lifecycle, androidx.activity, androidx.compose
-(BOM, ui, runtime, foundation, material3, material-icons-extended),
-androidx.core (Apache-2.0)** — the Compose UI: navigation between features,
-lifecycle-aware state collection, activity result contracts for the SAF file
-picker, Material 3 components and the icon set. Icons are restricted by
-`tools/verify/icons-allowlist.txt`.
+(BOM, ui, runtime, foundation, animation, animation-core, material3,
+material-icons-extended), androidx.core (Apache-2.0)** — the Compose UI:
+navigation between features, lifecycle-aware state collection, activity result
+contracts for the SAF file picker, Material 3 components and the icon set. The
+animation artifacts back `core:ui`'s `McAnimatedVisibility` / `McCrossfade`
+wrappers, which every feature uses so that the system "remove animations"
+setting collapses motion in one place instead of per screen. Icons are restricted
+by `tools/verify/icons-allowlist.txt`.
 
 **androidx.biometric (Apache-2.0)** — optional app lock using the platform
 biometric/device-credential prompt. Master Control stores no biometric data and

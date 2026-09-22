@@ -40,6 +40,10 @@ dependencies {
     api(libs.androidx.compose.material3)
     api(libs.androidx.compose.material.icons.extended)
     api(libs.androidx.compose.foundation)
+    // Motion.kt wraps AnimatedVisibility/Crossfade and exposes them to every
+    // feature module, so the animation artifacts are part of this module's API.
+    api(libs.androidx.compose.animation)
+    api(libs.androidx.compose.animation.core)
     api(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
 

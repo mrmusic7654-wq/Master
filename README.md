@@ -82,6 +82,7 @@ app  ──────────────►  feature:*  ─────�
 | `third_party/tdlib` | Vendored TDLib 1.8.67 source (Boost License 1.0) |
 | `tools/verify` | Offline verification harness: syntax check, JVM unit tests, structure/policy check |
 | `scripts` | `build-tdlib.sh` (native build), `check-third-party.sh` (license hygiene) |
+| `tools/verify` | offline gate: Kotlin syntax harness, JVM test runner, `structure-check.py`, `dependency-audit.py` |
 
 Read [`ARCHITECTURE.md`](ARCHITECTURE.md) for the data flow of an import, an
 upload and a reconciliation run, and for the reasoning behind each boundary.
@@ -107,8 +108,9 @@ environment may not reach Google Maven, the repository also ships an offline
 harness that runs the checks that do not need the Android SDK:
 
 ```bash
-tools/verify/run-offline-checks.sh          # syntax + JVM unit tests + structure + licenses
+tools/verify/run-offline-checks.sh          # syntax + JVM tests + structure + classpath + licenses
 python3 tools/verify/structure-check.py     # module boundaries, Hilt wiring, banned patterns
+python3 tools/verify/dependency-audit.py    # every import is on that module's compile classpath
 ./scripts/check-third-party.sh              # every dependency has a license entry
 ```
 

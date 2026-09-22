@@ -26,16 +26,21 @@ where possible, by `tools/verify/structure-check.py`:
 5. **Never log or export** api hashes, verification codes, 2FA passwords, session
    keys or full content URIs. Use the `Logger` façade; register new secret-shaped
    values with `registerSecret`.
-6. **No new dependency without a reason.** Every library must be justified in
+6. **Declare what you import.** If a file imports an artifact, the module that
+   contains the file declares it — do not lean on a transitive `implementation`
+   edge from another module. `tools/verify/dependency-audit.py` enforces this and
+   fails CI otherwise. Exposing a library through `api` is a deliberate decision
+   that belongs in a comment (see `core/database/build.gradle.kts`).
+7. **No new dependency without a reason.** Every library must be justified in
    [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) (what it replaces, why
    that is not enough) and pinned in `gradle/libs.versions.toml`. "It's popular"
    is not a reason. `./scripts/check-third-party.sh` fails on undocumented groups.
-7. **No new module without a reason.** The module list is deliberately small;
+8. **No new module without a reason.** The module list is deliberately small;
    prefer adding to an existing layer over creating `:core:whatever`.
-8. **No playback, no Streamer code, no server/CDN/proxy** in this app.
-9. **Versions live in the catalog.** A hard-coded version string in a
+9. **No playback, no Streamer code, no server/CDN/proxy** in this app.
+10. **Versions live in the catalog.** A hard-coded version string in a
    `build.gradle.kts` fails the structure check.
-10. **Icons are curated.** `Icons.*` usages must appear in
+11. **Icons are curated.** `Icons.*` usages must appear in
     `tools/verify/icons-allowlist.txt` — the extended icon set is huge and only
     the icons actually used should be reachable.
 
@@ -100,6 +105,7 @@ Read [`ARCHITECTURE.md`](ARCHITECTURE.md) before moving code between layers.
 
 ```bash
 python3 tools/verify/structure-check.py     # imports, DI wiring, banned patterns, versions, icons, required files
+python3 tools/verify/dependency-audit.py    # every external import is on that module's compile classpath
 ./scripts/check-third-party.sh              # dependency ↔ license documentation
 ./gradlew test lintDebug                    # unit tests + lint
 tools/verify/run-offline-checks.sh          # everything above without Gradle/SDK access

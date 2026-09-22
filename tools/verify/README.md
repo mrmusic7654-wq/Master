@@ -17,7 +17,8 @@ Nothing here replaces a real compile of the Android and Compose modules.
 | 1 | `harness/SyntaxCheck.kt` | Parses every `.kt` file with the real Kotlin front-end (PSI). Catches syntax errors, unbalanced braces, malformed annotations. **No type resolution.** |
 | 2 | `harness/TestRunner.kt` | Compiles and executes the pure-JVM test suites: `:domain` and `:core:common`. Files that need artifacts outside the Kotlin compiler distribution (kotlinx-serialization runtime, Room, androidx.sqlite) are excluded by an explicit, auditable list in `run-offline-checks.sh`. |
 | 3 | `structure-check.py` | Module boundaries, imports resolvable through declared dependencies, **missing imports of project types**, Hilt wiring, banned placeholders, version-catalog discipline, curated icon allowlist, required project files, unused imports. Python 3 only. |
-| 4 | `../../scripts/check-third-party.sh` | Every dependency group declared in `gradle/libs.versions.toml` is documented in `THIRD_PARTY_LICENSES.md`; TDLib vendoring and `NOTICE` are verified. |
+| 4 | `dependency-audit.py` | Every **external** import is provided by a declared dependency on that module's compile classpath, honouring Gradle's `api` vs `implementation` visibility across the project graph. Python 3 only. |
+| 5 | `../../scripts/check-third-party.sh` | Every dependency group declared in `gradle/libs.versions.toml` is documented in `THIRD_PARTY_LICENSES.md`; TDLib vendoring and `NOTICE` are verified. |
 
 Run everything:
 
@@ -53,7 +54,34 @@ toolchain itself is missing, so a broken environment never looks like a pass.
 ```bash
 python3 tools/verify/structure-check.py                  # report, exit 1 on error
 python3 tools/verify/structure-check.py --fix-unused-imports   # maintenance mode
+python3 tools/verify/dependency-audit.py                 # compile-classpath audit
+python3 tools/verify/dependency-audit.py --verbose       # + resolved classpath size per module
 ```
+
+### dependency-audit.py
+
+`structure-check.py` answers "does this import resolve to a type we declare?";
+this answers "is the *artifact* that provides it on this module's compile
+classpath?". It models the part of Gradle that decides this:
+
+* `api` deps are visible to the module and its consumers; `implementation` deps
+  are visible to the module only;
+* a `project(":x")` edge therefore exposes `:x`'s own packages plus the closure
+  of `:x`'s `api` edges;
+* `ksp`, `annotationProcessor` and `runtimeOnly` are not compile classpath;
+* `test`/`androidTest` source sets additionally see their own configurations.
+
+For each catalog alias it knows which packages that artifact puts on the compile
+classpath, **including** its own api-scoped transitives — so `material3` covers
+`androidx.compose.foundation` and the core icon set, but deliberately does *not*
+cover `androidx.compose.animation`. That table (`PROVIDES`) is the one thing to
+update when a dependency is added; an alias missing from it is reported as a
+problem rather than silently ignored.
+
+It found two real build breakers: `:core:database` exposing Room through
+`implementation` while `:data` called `androidx.room.withTransaction`, and
+`core:ui` using `AnimatedVisibility`/`Crossfade` without declaring
+`androidx.compose.animation`.
 
 What it enforces:
 

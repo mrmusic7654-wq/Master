@@ -9,7 +9,10 @@
 #   2. Compile + execute the pure-JVM :domain and :core:common unit tests.
 #   3. Structure/dependency/policy check (tools/verify/structure-check.py):
 #      module boundaries, banned patterns, Hilt wiring, unused imports.
-#   4. Third-party license hygiene (scripts/check-third-party.sh).
+#   4. Compile-classpath audit (tools/verify/dependency-audit.py): every external
+#      import is provided by a declared dependency, honouring api vs
+#      implementation visibility across the module graph.
+#   5. Third-party license hygiene (scripts/check-third-party.sh).
 #
 # The authoritative build remains `./gradlew` (see BUILD.md). This harness is
 # for environments without repository access to Google Maven / Maven Central —
@@ -70,15 +73,19 @@ echo "════════════════════════�
 # 1. Harness (syntax checker + test runner)
 # ---------------------------------------------------------------------------
 echo
-echo "[1/5] building verification harness"
-kotlinc -cp "$COMPILER_JAR" -d "$OUT_DIR/harness" \
+echo "[1/6] building verification harness"
+# stdlib is on the classpath explicitly: some Kotlin distributions (including
+# the npm `kotlin-compiler` package) ship a kotlin-compiler.jar that does not
+# bundle kotlin-stdlib, and the harness uses stdlib APIs (File.walkTopDown,
+# emptyList, reflection helpers).
+kotlinc -cp "$COMPILER_JAR:$STDLIB_JAR" -d "$OUT_DIR/harness" \
   tools/verify/harness/SyntaxCheck.kt tools/verify/harness/TestRunner.kt
 
 # ---------------------------------------------------------------------------
 # 2. Syntax check of every Kotlin source file in the repository
 # ---------------------------------------------------------------------------
 echo
-echo "[2/5] kotlin syntax check (all modules)"
+echo "[2/6] kotlin syntax check (all modules)"
 if ! "$JAVA_BIN" "${JAVA_OPTS[@]}" \
       -cp "$COMPILER_JAR:$STDLIB_JAR:$OUT_DIR/harness" \
       mastercontrol.verify.SyntaxCheckKt . ; then
@@ -94,7 +101,7 @@ fi
 # is explicit and auditable.
 # ---------------------------------------------------------------------------
 echo
-echo "[3/5] pure-JVM modules: compile + unit tests"
+echo "[3/6] pure-JVM modules: compile + unit tests"
 
 if [[ -z "$COROUTINES_JAR" ]]; then
   echo "  SKIP: kotlinx-coroutines-core-jvm.jar not present in $KOTLIN_LIB" >&2
@@ -144,7 +151,7 @@ fi
 # imports. Needs only python3.
 # ---------------------------------------------------------------------------
 echo
-echo "[4/5] structure check"
+echo "[4/6] structure check"
 if command -v python3 >/dev/null 2>&1; then
   if ! python3 tools/verify/structure-check.py; then fail=1; fi
 else
@@ -152,10 +159,26 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Third-party license hygiene
+# 5. Compile-classpath audit
+#
+# Catches the errors a syntax-only parse cannot see and that would otherwise
+# only appear in a real Gradle build: an external type imported by a module that
+# never declares the artifact providing it (or that only gets it through an
+# `implementation` edge of another module, which Gradle does not expose).
 # ---------------------------------------------------------------------------
 echo
-echo "[5/5] third-party license check"
+echo "[5/6] dependency / compile-classpath audit"
+if command -v python3 >/dev/null 2>&1; then
+  if ! python3 tools/verify/dependency-audit.py; then fail=1; fi
+else
+  echo "  SKIP: python3 not available" >&2
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Third-party license hygiene
+# ---------------------------------------------------------------------------
+echo
+echo "[6/6] third-party license check"
 if ! ./scripts/check-third-party.sh; then fail=1; fi
 
 echo
