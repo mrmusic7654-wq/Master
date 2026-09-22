@@ -1,0 +1,127 @@
+name: 'Publish failure logs'
+description: >-
+  Makes a failed job diagnosable from outside the runner. Runner log download is
+  not reachable from every environment (and `gh pr comment` needs write scopes a
+  token may not have), so this action does both, best-effort: it posts a digest
+  to the pull request AND force-pushes the raw logs to a `ci/diag-<job-slug>`
+  branch, which anyone with repo read access can fetch with git.
+
+inputs:
+  job-slug:
+    description: 'Short stable identifier for the job, used as the branch suffix'
+    required: true
+  title:
+    description: 'Human-readable job name used in the digest heading'
+    required: true
+  files:
+    description: 'Space separated globs of logs to collect'
+    required: false
+    default: 'gradle-*.log tdlib-build.log ci-diagnostics/*.log'
+  grep-pattern:
+    description: 'Extended regex used to extract the interesting lines'
+    required: false
+    default: '^e: |error:|FAILURE:|Caused by:|> Task .* FAILED|Execution failed|What went wrong|unresolved reference|cannot access|Duplicate class|CMake Error|ninja: build stopped|fatal error|AAPT|aapt2|ERROR:'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Publish logs
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        JOB_SLUG: ${{ inputs.job-slug }}
+        TITLE: ${{ inputs.title }}
+        FILES: ${{ inputs.files }}
+        GREP_PATTERN: ${{ inputs.grep-pattern }}
+        EVENT_NAME: ${{ github.event_name }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -uo pipefail
+        shopt -s nullglob
+
+        mkdir -p ci-diagnostics
+        collected=()
+        for pattern in $FILES; do
+          for file in $pattern; do
+            [[ -f "$file" ]] && collected+=("$file")
+          done
+        done
+
+        # ---------------------------------------------------------------------
+        # 1. Digest body
+        # ---------------------------------------------------------------------
+        {
+          echo "### :x: \`${TITLE}\` failed"
+          echo
+          echo "Run: ${RUN_URL}"
+          echo
+          if [[ ${#collected[@]} -gt 0 ]]; then
+            echo "Extracted errors:"
+            echo
+            echo '```'
+            if grep -hE "$GREP_PATTERN" "${collected[@]}" 2>/dev/null | head -150; then
+              :
+            else
+              echo "(nothing matched the error pattern — see the raw tails below)"
+            fi
+            echo '```'
+            echo
+            for file in "${collected[@]}"; do
+              echo "<details><summary>tail of ${file}</summary>"
+              echo
+              echo '```'
+              tail -80 "$file"
+              echo '```'
+              echo
+              echo "</details>"
+              echo
+            done
+          else
+            echo "No log files were produced — the job failed before its main"
+            echo "command ran. Check the step list in the run, and the"
+            echo "\`ci-diagnostics/\` logs if the failure was in a setup action."
+          fi
+          echo
+          echo "Raw logs branch: \`ci/diag-${JOB_SLUG}\` (fetch with"
+          echo "\`git fetch origin ci/diag-${JOB_SLUG} && git show FETCH_HEAD --stat\`)."
+        } > digest.md
+
+        cat digest.md || true
+
+        # ---------------------------------------------------------------------
+        # 2. Pull request comment (best effort: needs pull-requests write)
+        # ---------------------------------------------------------------------
+        if [[ "$EVENT_NAME" == "pull_request" && -n "$PR_NUMBER" ]]; then
+          gh pr comment "$PR_NUMBER" --body-file digest.md \
+            || echo "PR comment failed (token lacks pull-requests write?) — continuing"
+        fi
+
+        # ---------------------------------------------------------------------
+        # 3. Push raw logs to a diagnostics branch (needs contents write).
+        #    Separate ref per job so parallel jobs cannot race each other, and
+        #    force-pushed so the branch never grows.
+        # ---------------------------------------------------------------------
+        tmp="$(mktemp -d)"
+        git init -q "$tmp/logs"
+        cp digest.md "$tmp/logs/digest.md"
+        mkdir -p "$tmp/logs/raw"
+        for file in "${collected[@]}"; do
+          cp "$file" "$tmp/logs/raw/$(echo "$file" | tr '/' '_')" 2>/dev/null || true
+        done
+        git -C "$tmp/logs" add -A
+        if git -C "$tmp/logs" \
+             -c user.name="github-actions[bot]" \
+             -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+             commit -q -m "ci: ${TITLE} failure logs [skip ci]"; then
+          git -C "$tmp/logs" push -q -f \
+            "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
+            "HEAD:refs/heads/ci/diag-${JOB_SLUG}" \
+            && echo "pushed logs to ci/diag-${JOB_SLUG}" \
+            || echo "log branch push failed (token lacks contents write?) — continuing"
+        else
+          echo "nothing to commit for the diagnostics branch"
+        fi
+        rm -rf "$tmp"
+        exit 0

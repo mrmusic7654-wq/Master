@@ -13,10 +13,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /** Observes connectivity: offline / wifi / metered, reacting to changes. */
 @Singleton
-class ConnectivityMonitor @Inject constructor(context: Context) {
+class ConnectivityMonitor @Inject constructor(@ApplicationContext context: Context) {
 
     private val connectivityManager =
         context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

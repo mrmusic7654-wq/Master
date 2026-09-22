@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launcher foreground: a control surface (three fader tracks with knobs) over a
+    vault outline — "master control of a media vault". Original artwork, no
+    Telegram branding.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:scaleX="0.62" android:scaleY="0.62" android:translateX="20.5" android:translateY="20.5">
+        <!-- vault outline -->
+        <path
+            android:pathData="M14,26a8,8 0 0,1 8,-8h52a8,8 0 0,1 8,8v44a8,8 0 0,1 -8,8h-52a8,8 0 0,1 -8,-8z"
+            android:strokeColor="#8FD3C7"
+            android:strokeWidth="4"
+            android:fillColor="#00000000" />
+        <!-- fader tracks -->
+        <path
+            android:pathData="M32,34v32" android:strokeColor="#F2F5F7" android:strokeWidth="4" android:strokeLineCap="round" />
+        <path
+            android:pathData="M52,34v32" android:strokeColor="#F2F5F7" android:strokeWidth="4" android:strokeLineCap="round" />
+        <path
+            android:pathData="M72,34v32" android:strokeColor="#F2F5F7" android:strokeWidth="4" android:strokeLineCap="round" />
+        <!-- knobs at different positions -->
+        <path
+            android:pathData="M32,44m-6,0a6,6 0 1,0 12,0a6,6 0 1,0 -12,0"
+            android:fillColor="#5AC8B4" />
+        <path
+            android:pathData="M52,58m-6,0a6,6 0 1,0 12,0a6,6 0 1,0 -12,0"
+            android:fillColor="#5AC8B4" />
+        <path
+            android:pathData="M72,38m-6,0a6,6 0 1,0 12,0a6,6 0 1,0 -12,0"
+            android:fillColor="#5AC8B4" />
+    </group>
+</vector>

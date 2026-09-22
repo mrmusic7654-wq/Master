@@ -1,0 +1,403 @@
+name: CI
+
+# Static checks, unit tests, lint and both assemble variants run on every push
+# and pull request. The TDLib native build and the emulator run are gated behind
+# `native-trigger`: they execute nightly, on demand, or when something that
+# affects the native build changed, because a cold TDLib build dominates the
+# runtime of everything else combined.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # 02:30 UTC nightly — native rebuild + instrumented tests.
+    - cron: '30 2 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JAVA_DISTRIBUTION: temurin
+  JAVA_VERSION: '17'
+  COMPILE_SDK: '35'
+  BUILD_TOOLS: '35.0.0'
+  NDK_VERSION: '26.3.11579264'
+  CMAKE_VERSION: '3.22.1'
+  # Keeps Gradle quiet and reproducible in CI without the daemon's warm cache.
+  GRADLE_OPTS: >-
+    -Dorg.gradle.daemon=false
+    -Dorg.gradle.parallel=true
+    -Dorg.gradle.caching=true
+    -Dkotlin.incremental=false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Static checks — no JDK, no SDK, no network beyond the checkout.
+  # ---------------------------------------------------------------------------
+  static:
+    name: Static & license checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Validates the committed wrapper jar against Gradle's published checksums:
+      # a tampered wrapper is a supply-chain attack, not a build failure.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Structure, DI, imports, banned patterns, versions, icons
+        run: python3 tools/verify/structure-check.py
+
+      - name: Compile-classpath audit (api vs implementation visibility)
+        run: python3 tools/verify/dependency-audit.py
+
+      - name: Every declared dependency is documented
+        run: ./scripts/check-third-party.sh
+
+      - name: Shell scripts parse cleanly
+        run: |
+          set -eu
+          for script in scripts/*.sh tools/verify/*.sh; do
+            echo "-- bash -n $script"
+            bash -n "$script"
+          done
+          for script in scripts/*.sh tools/verify/*.sh; do
+            [[ -x "$script" ]] || { echo "not executable: $script" >&2; exit 1; }
+          done
+
+      - name: Required files are present and non-empty
+        run: |
+          set -eu
+          for f in README.md ARCHITECTURE.md SETUP.md TELEGRAM_SETUP.md BUILD.md \
+                   SECURITY.md CONTRIBUTING.md THIRD_PARTY_LICENSES.md \
+                   LICENSE NOTICE .github/workflows/ci.yml; do
+            [[ -s "$f" ]] || { echo "missing or empty: $f" >&2; exit 1; }
+          done
+
+      - name: No secrets committed
+        run: |
+          set -eu
+          # A 32-hex string that is not in a doc/example would be an api hash.
+          if git grep -InE '\b[0-9a-f]{32}\b' -- '*.kt' '*.kts' '*.xml' '*.properties' \
+               ':!*example*' | grep -viE 'sha|checksum|digest|hash-?' ; then
+            echo "possible api_hash committed" >&2
+            exit 1
+          fi
+          for f in local.properties keystore.properties; do
+            [[ -e "$f" ]] && { echo "$f must never be committed" >&2; exit 1; }
+          done
+          true
+
+  # ---------------------------------------------------------------------------
+  # 2. Unit tests + lint (JVM/Robolectric-free; no native libraries needed).
+  # ---------------------------------------------------------------------------
+  unit-tests:
+    name: Unit tests & lint
+    runs-on: ubuntu-latest
+    needs: static
+    permissions:
+      # `contents: write` only so the failure publisher can force-push its
+      # ci/diag-* branch; nothing else in the job writes to the repository.
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK
+        uses: ./.github/actions/setup-android-sdk
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          ./gradlew --stacktrace test 2>&1 | tee gradle-test.log
+
+      - name: Lint
+        run: |
+          set -o pipefail
+          ./gradlew --stacktrace lintDebug 2>&1 | tee gradle-lint.log
+
+      # Runner logs are not downloadable from every environment, so failures
+      # are published to the PR and to a `ci/diag-*` branch we can fetch.
+      - name: Post failure digest to the pull request
+        if: failure()
+        uses: ./.github/actions/publish-failure-logs
+        with:
+          job-slug: unit-tests
+          title: Unit tests & lint
+
+      - name: Upload test & lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-unit-tests
+          path: |
+            **/build/reports/tests/
+            **/build/reports/lint-results-debug.html
+            **/build/reports/lint-results-debug.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # 3. Assemble both variants. Release stays unsigned: CI holds no keystore.
+  # ---------------------------------------------------------------------------
+  assemble:
+    name: Assemble debug & release
+    runs-on: ubuntu-latest
+    needs: static
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK
+        uses: ./.github/actions/setup-android-sdk
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Build APKs
+        run: |
+          set -o pipefail
+          ./gradlew --stacktrace :app:assembleDebug :app:assembleRelease 2>&1 | tee gradle-assemble.log
+
+      # Runner logs are not downloadable from every environment, so failures
+      # are published to the PR and to a `ci/diag-*` branch we can fetch.
+      - name: Post failure digest to the pull request
+        if: failure()
+        uses: ./.github/actions/publish-failure-logs
+        with:
+          job-slug: assemble
+          title: Assemble debug & release
+
+      - name: Verify the debug APK has no native libraries baked in from git
+        run: |
+          set -eu
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          [[ -f "$apk" ]] || { echo "debug APK was not produced" >&2; exit 1; }
+          # TDLib is a build product, so CI-built APKs contain no libtdjson.so.
+          # That is expected and asserted here so nobody "fixes" it by
+          # committing binaries.
+          if unzip -l "$apk" | grep -q 'libtdjson\.so'; then
+            echo "unexpected: prebuilt TDLib binary was packaged" >&2
+            exit 1
+          fi
+          echo "debug APK: $(du -h "$apk" | cut -f1)"
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # 4. Decide whether the expensive native path runs for this event.
+  # ---------------------------------------------------------------------------
+  native-trigger:
+    name: Native build needed?
+    runs-on: ubuntu-latest
+    outputs:
+      build-native: ${{ steps.filter.outputs.changed }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes that affect the native build
+        id: filter
+        run: |
+          set -eu
+          case "${GITHUB_EVENT_NAME}" in
+            schedule|workflow_dispatch)
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+          base="${{ github.event.pull_request.base.sha }}"
+          [[ -n "$base" ]] || base="${{ github.event.before }}"
+          if [[ -z "$base" || "$base" == "0000000000000000000000000000000000000000" ]] \
+             || ! git cat-file -e "$base" 2>/dev/null; then
+            base="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+          fi
+          echo "comparing $base..HEAD"
+          if git diff --name-only "$base" HEAD | grep -qE \
+            '^(third_party/tdlib/|scripts/build-tdlib\.sh|telegram/build\.gradle\.kts|gradle/libs\.versions\.toml|\.github/workflows/ci\.yml)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 5. Build TDLib from the vendored source for every shipped ABI.
+  # ---------------------------------------------------------------------------
+  native-tdlib:
+    name: Build TDLib (native)
+    runs-on: ubuntu-latest
+    needs: native-trigger
+    if: needs.native-trigger.outputs.build-native == 'true'
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK, NDK and CMake
+        uses: ./.github/actions/setup-android-sdk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Install TDLib host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gperf php-cli perl make unzip
+
+      - name: Cache the TDLib build tree
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/tdlib
+          key: tdlib-${{ env.NDK_VERSION }}-${{ hashFiles('scripts/build-tdlib.sh', 'third_party/tdlib/CMakeLists.txt') }}
+          restore-keys: |
+            tdlib-${{ env.NDK_VERSION }}-
+
+      - name: Build libtdjson.so for arm64-v8a, armeabi-v7a and x86_64
+        run: |
+          set -o pipefail
+          ./scripts/build-tdlib.sh --include-x86-64 2>&1 | tee tdlib-build.log
+
+      # Runner logs are not downloadable from every environment, so failures
+      # are published to the PR and to a `ci/diag-*` branch we can fetch.
+      - name: Post failure digest to the pull request
+        if: failure()
+        uses: ./.github/actions/publish-failure-logs
+        with:
+          job-slug: native-tdlib
+          title: Build TDLib (native)
+
+      - name: Show the build manifest
+        run: cat telegram/src/main/jniLibs/BUILD-INFO.txt
+
+      - name: Upload native libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-jniLibs
+          path: telegram/src/main/jniLibs/
+          if-no-files-found: error
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # 6. Instrumented tests on an emulator, using the native libraries from (5).
+  # ---------------------------------------------------------------------------
+  instrumented:
+    name: Instrumented tests (emulator)
+    runs-on: ubuntu-latest
+    needs: [native-trigger, native-tdlib]
+    if: >-
+      needs.native-trigger.outputs.build-native == 'true' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [34]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK
+        uses: ./.github/actions/setup-android-sdk
+        with:
+          packages: >-
+            platforms;android-35 build-tools;35.0.0 platform-tools emulator
+            system-images;android-${{ matrix.api-level }};google_apis;x86_64
+
+      - name: Restore the native libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: tdlib-jniLibs
+          path: telegram/src/main/jniLibs/
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          ram-size: 4096M
+          heap-size: 1024M
+          disable-animations: true
+          avd-name: mc-api${{ matrix.api-level }}
+          script: ./gradlew --stacktrace :app:assembleDebug -PincludeX86_64=true connectedDebugAndroidTest
+
+      - name: Upload instrumented reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-instrumented-api${{ matrix.api-level }}
+          path: '**/build/reports/androidTests/'
+          if-no-files-found: ignore
+          retention-days: 14

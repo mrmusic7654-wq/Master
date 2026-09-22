@@ -49,9 +49,12 @@ import kotlinx.coroutines.launch
  * [TelegramUploadExecutor]. Scheduling is idempotent — there is exactly one of
  * these workers (unique name), so concurrent runs can never double-upload.
  *
- * NOTE: a single WorkManager run is time-boxed (~10 minutes). Very large
- * transfers therefore need the foreground-service upgrade
- * (setForeground + notification); that wiring belongs in the app module.
+ * Long-running transfers: a plain WorkManager run is time-boxed, so while a task
+ * is actually in flight the worker promotes itself to a foreground service with a
+ * progress notification ([UploadNotifications]). The promotion is best effort —
+ * if the platform refuses it (restricted background start, missing permission)
+ * the transfer continues as ordinary background work and the row is reclaimed by
+ * the next run if the process is stopped.
  */
 @HiltWorker
 class UploadQueueWorker @AssistedInject constructor(
@@ -68,8 +71,11 @@ class UploadQueueWorker @AssistedInject constructor(
 
     private val appContext: Context get() = applicationContext
 
+    private val notifications: UploadNotifications by lazy { UploadNotifications(appContext) }
+
     override suspend fun doWork(): Result {
         return try {
+            notifications.ensureChannel()
             if (!gatePassed()) {
                 return Result.retry()
             }
@@ -171,7 +177,9 @@ class UploadQueueWorker @AssistedInject constructor(
             caption = buildCaption(video, settings.captionIncludesVideoId),
         )
 
-        val outcome = executeUpload(task, job)
+        // Promote to a foreground service for the duration of the real transfer.
+        promoteToForeground(task, video.title)
+        val outcome = executeUpload(task, job, video.title)
         when (outcome) {
             is Outcome.Completed -> logger.info(Tags.WORKER, "upload ${task.taskId} completed")
             is Outcome.CancelledWhileRunning -> logger.info(Tags.WORKER, "upload ${task.taskId} cancelled while running")
@@ -183,8 +191,9 @@ class UploadQueueWorker @AssistedInject constructor(
      * Runs [job] to its terminal event. While it runs, a watcher polls the row
      * so an operator cancellation reaches the in-flight transfer promptly.
      */
-    private suspend fun executeUpload(task: UploadTask, job: UploadJob): Outcome {
+    private suspend fun executeUpload(task: UploadTask, job: UploadJob, title: String): Outcome {
         var terminal: UploadProgressEvent? = null
+        var lastNotificationUpdateMs = 0L
         coroutineScope {
             val watcher = launch {
                 while (isActive) {
@@ -196,6 +205,15 @@ class UploadQueueWorker @AssistedInject constructor(
             try {
                 executor.upload(job).collect { event ->
                     handleEvent(task, event)
+                    if (event is UploadProgressEvent.Transferring) {
+                        val nowMs = System.currentTimeMillis()
+                        // Throttled: at most one notification refresh per second.
+                        if (nowMs - lastNotificationUpdateMs >= NOTIFICATION_THROTTLE_MS) {
+                            lastNotificationUpdateMs = nowMs
+                            val row = uploadTaskRepository.getTask(task.taskId)
+                            if (row != null) notifications.updateProgress(row, title)
+                        }
+                    }
                     if (event is UploadProgressEvent.Completed || event is UploadProgressEvent.Failed) {
                         terminal = event
                     }
@@ -282,6 +300,23 @@ class UploadQueueWorker @AssistedInject constructor(
             ),
         )
         logger.info(Tags.WORKER, "upload ${task.taskId} committed: message ${receipt.messageId}")
+    }
+
+    /**
+     * Best-effort promotion to a foreground service. WorkManager throws
+     * [IllegalStateException] when the platform forbids starting a foreground
+     * service right now; the upload then proceeds as background work.
+     */
+    private suspend fun promoteToForeground(task: UploadTask, title: String) {
+        try {
+            setForeground(notifications.foregroundInfo(task, title))
+        } catch (t: IllegalStateException) {
+            logger.warn(
+                Tags.WORKER,
+                "foreground promotion refused for task ${task.taskId}; continuing in background",
+                t,
+            )
+        }
     }
 
     // ---- failure handling --------------------------------------------------
@@ -427,5 +462,8 @@ class UploadQueueWorker @AssistedInject constructor(
 
         /** How often the worker checks whether the operator cancelled the task. */
         const val CANCEL_POLL_MS = 2_000L
+
+        /** Minimum spacing between notification refreshes. */
+        const val NOTIFICATION_THROTTLE_MS = 1_000L
     }
 }

@@ -37,6 +37,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.javax.inject)
     implementation(libs.datastore.preferences)
+    // Used directly: repositories wrap multi-table writes in withTransaction().
+    implementation(libs.room.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

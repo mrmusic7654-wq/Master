@@ -20,6 +20,15 @@ interface Logger {
 
     /** Current in-memory diagnostics buffer (never contains secrets). */
     fun exportDiagnostics(): String
+
+    /**
+     * Registers a value that must never appear in any log line or diagnostics
+     * export — the Telegram api hash above all. Registered values are replaced
+     * with `***` before a message is written or buffered. Values shorter than
+     * eight characters are ignored: masking them would corrupt ordinary numbers
+     * and identifiers without protecting anything.
+     */
+    fun registerSecret(value: String)
 }
 
 object Tags {

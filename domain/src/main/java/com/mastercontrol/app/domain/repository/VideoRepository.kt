@@ -13,6 +13,9 @@ interface VideoRepository {
 
     fun observeAll(query: LibraryQuery = LibraryQuery()): Flow<List<Video>>
 
+    /** Every tag in the catalog, independent of the current filter (tag facet list). */
+    fun observeAllTags(): Flow<List<String>>
+
     fun observeVideo(videoId: String): Flow<Video?>
 
     suspend fun getVideo(videoId: String): Video?
@@ -61,6 +64,18 @@ interface VideoRepository {
 
     /** Compute dashboard statistics from real rows. */
     suspend fun computeStatistics(): LibraryStatistics
+
+    /** Video counts grouped by category (categories/folders screens). */
+    suspend fun countVideosByCategory(): Map<Long, Int>
+
+    /** Video counts grouped by folder (folders screen). */
+    suspend fun countVideosByFolder(): Map<Long, Int>
+
+    /** Active Telegram mappings grouped by storage channel (channels screen). */
+    suspend fun countActiveMappingsByChannel(): Map<Long, Int>
+
+    /** Telegram bytes referenced per storage channel (channels screen). */
+    suspend fun activeMappingBytesByChannel(): Map<Long, Long>
 
     /** Diagnostics. */
     suspend fun countVideos(): Long

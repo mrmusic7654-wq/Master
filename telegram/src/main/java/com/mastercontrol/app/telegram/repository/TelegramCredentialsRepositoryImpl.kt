@@ -1,5 +1,6 @@
 package com.mastercontrol.app.telegram.repository
 
+import com.mastercontrol.app.core.logging.Logger
 import com.mastercontrol.app.core.security.SecretAliases
 import com.mastercontrol.app.core.security.SecretStore
 import com.mastercontrol.app.domain.repository.TelegramCredentialsRepository
@@ -16,17 +17,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 @Singleton
 class TelegramCredentialsRepositoryImpl @Inject constructor(
     private val secretStore: SecretStore,
+    private val logger: Logger,
 ) : TelegramCredentialsRepository {
 
     private val _configured = MutableStateFlow(secretStore.contains(SecretAliases.TELEGRAM_API_ID) && secretStore.contains(SecretAliases.TELEGRAM_API_HASH))
+
+    init {
+        // A hash restored from a previous session must be masked from the very
+        // first log line, not only after the next save().
+        secretStore.read(SecretAliases.TELEGRAM_API_HASH)?.let(logger::registerSecret)
+    }
 
     override fun observeConfigured(): Flow<Boolean> = _configured
 
     override suspend fun isConfigured(): Boolean = _configured.value
 
     override suspend fun save(apiId: Long, apiHash: String) {
+        val normalized = apiHash.trim()
+        logger.registerSecret(normalized)
         secretStore.save(SecretAliases.TELEGRAM_API_ID, apiId.toString())
-        secretStore.save(SecretAliases.TELEGRAM_API_HASH, apiHash.trim())
+        secretStore.save(SecretAliases.TELEGRAM_API_HASH, normalized)
         _configured.value = true
     }
 
@@ -40,6 +50,7 @@ class TelegramCredentialsRepositoryImpl @Inject constructor(
     suspend fun readCredentials(): Pair<Long, String>? {
         val id = secretStore.read(SecretAliases.TELEGRAM_API_ID)?.toLongOrNull() ?: return null
         val hash = secretStore.read(SecretAliases.TELEGRAM_API_HASH) ?: return null
+        logger.registerSecret(hash)
         return id to hash
     }
 }

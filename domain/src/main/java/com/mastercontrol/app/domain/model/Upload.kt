@@ -52,12 +52,20 @@ data class RetryPolicy(
     val baseDelayMs: Long = 30_000L,
     val maxDelayMs: Long = 3_600_000L,
 ) {
-    /** Exponential backoff with a hard cap; 1-indexed [attempt]. */
+    /**
+     * Bounded exponential backoff for a 1-indexed [attempt].
+     *
+     * attempt 1 is the first try and never waits; attempt 2 (the first retry)
+     * waits [baseDelayMs], then doubles per attempt until [maxDelayMs].
+     */
     fun delayForAttempt(attempt: Int): Long {
         if (attempt <= 1) return 0L
-        val exponent = (attempt - 1).coerceAtMost(10)
+        val exponent = (attempt - 2).coerceIn(0, 10)
         return (baseDelayMs * (1L shl exponent)).coerceAtMost(maxDelayMs)
     }
+
+    /** True when [attempt] has exhausted the retry budget (no further retries). */
+    fun isExhausted(attempt: Int): Boolean = attempt >= maxAttempts
 }
 
 /** Input handed to the Telegram upload executor by the worker. */

@@ -1,0 +1,92 @@
+# Material icon allowlist for Master Control.
+#
+# Every `Icons.<Style>.<Name>` used in a production source set must appear here.
+# tools/verify/structure-check.py fails the build otherwise.
+#
+# Two reasons for the rule:
+#   1. Accessibility review — an icon is always paired with a word (a StatusChip
+#      label, a content description or adjacent text), so each addition is a
+#      deliberate decision, never decoration.
+#   2. APK size — material-icons-extended is large; a bounded, reviewed set keeps
+#      the shipped icon count honest.
+#
+# Format: one `<Style>.<Name>` per line. `#` starts a comment.
+
+# Navigation & app chrome
+AutoMirrored.Filled.ArrowBack
+Filled.Dashboard
+Filled.Menu
+Filled.MoreVert
+Filled.ArrowBack
+Filled.ExpandLess
+Filled.ExpandMore
+Filled.ViewList
+Filled.GridView
+Filled.SubdirectoryArrowRight
+
+# Actions
+Filled.Add
+Filled.Remove
+Filled.Edit
+Filled.Delete
+Filled.Clear
+Filled.Search
+Filled.FilterList
+Filled.Sort
+Filled.Refresh
+Filled.RestartAlt
+Filled.Restore
+Filled.Backup
+Filled.ContentCopy
+Filled.Logout
+Filled.Cancel
+Filled.CheckCircle
+Filled.Visibility
+Filled.VisibilityOff
+
+# Status & messages
+Filled.Info
+Filled.Warning
+Filled.Error
+Filled.Verified
+Filled.Schedule
+Filled.Sync
+Filled.BrokenImage
+Filled.Biotech
+
+# Library, media & storage
+Filled.VideoLibrary
+Filled.PhotoLibrary
+Filled.Image
+Filled.Movie
+Filled.MusicNote
+Filled.Storage
+Filled.CloudUpload
+Filled.CloudDone
+Filled.Upload
+Filled.Category
+Filled.Folder
+Filled.CreateNewFolder
+Filled.Archive
+Filled.Star
+
+# Telegram & security
+Filled.Phone
+Filled.Key
+Filled.Security
+Filled.Lock
+Filled.Fingerprint
+
+# Settings & appearance
+Filled.Settings
+Filled.Palette
+
+# Category icon vocabulary (see feature/categories CategoryIcon)
+Filled.Flight
+Filled.School
+Filled.SportsEsports
+Filled.SportsSoccer
+
+# (ungrouped)
+Filled.History
+Filled.RemoveCircleOutline

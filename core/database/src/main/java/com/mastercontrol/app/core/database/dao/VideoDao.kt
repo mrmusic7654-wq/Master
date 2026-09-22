@@ -6,6 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.mastercontrol.app.core.database.entity.GroupedCount
+import com.mastercontrol.app.core.database.entity.GroupedSum
 import com.mastercontrol.app.core.database.entity.TelegramMappingEntity
 import com.mastercontrol.app.core.database.entity.VideoEntity
 import com.mastercontrol.app.core.database.entity.VideoIdCounterEntity
@@ -94,6 +96,27 @@ interface VideoDao {
 
     @Query("SELECT COUNT(*) FROM videos WHERE folderId IS NOT NULL")
     suspend fun countVideosWithFolder(): Long
+
+    /**
+     * Moves every video of [fromFolderId] to [targetFolderId] (null = unfiled).
+     *
+     * Used by folder deletion so the operator's choice is actually applied
+     * inside the same transaction that removes the folder.
+     */
+    @Query("UPDATE videos SET folderId = :targetFolderId, updatedAtEpochMs = :updatedAtEpochMs WHERE folderId = :fromFolderId")
+    suspend fun reassignFolder(fromFolderId: Long, targetFolderId: Long?, updatedAtEpochMs: Long)
+
+    @Query("SELECT channelId AS ownerId, COUNT(*) AS count FROM telegram_mappings WHERE mappingStatus = 'ACTIVE' GROUP BY channelId")
+    suspend fun countActiveMappingsByChannel(): List<GroupedCount>
+
+    @Query("SELECT channelId AS ownerId, COALESCE(SUM(fileSizeBytes), 0) AS total FROM telegram_mappings WHERE mappingStatus = 'ACTIVE' GROUP BY channelId")
+    suspend fun sumActiveMappingBytesByChannel(): List<GroupedSum>
+
+    @Query("SELECT categoryId AS ownerId, COUNT(*) AS count FROM videos WHERE categoryId IS NOT NULL GROUP BY categoryId")
+    suspend fun countByCategory(): List<GroupedCount>
+
+    @Query("SELECT folderId AS ownerId, COUNT(*) AS count FROM videos WHERE folderId IS NOT NULL GROUP BY folderId")
+    suspend fun countByFolder(): List<GroupedCount>
 
     // ---- tags -------------------------------------------------------------
 

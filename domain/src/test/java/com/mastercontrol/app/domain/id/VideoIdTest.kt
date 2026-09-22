@@ -35,8 +35,8 @@ class VideoIdTest {
 
     @Test
     fun `ids are monotonically increasing and never reused`() {
-        var previous = VideoId.format(-1) // null sentinel path
-        previous = VideoId.nextAfter(null)
+        // The allocator starts from an empty catalog: the first permanent ID is VID-000000.
+        var previous = VideoId.nextAfter(null)
         assertEquals("VID-000000", previous)
         for (i in 1..1000) {
             val next = VideoId.nextAfter(previous)
@@ -44,5 +44,13 @@ class VideoIdTest {
             previous = next
         }
         assertNull(VideoId.parseSequence("garbage"))
+        assertNull(VideoId.parseSequence(null))
+        // format() must reject negative sequences rather than emit a malformed ID.
+        try {
+            VideoId.format(-1)
+            org.junit.Assert.fail("format(-1) must be rejected")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("sequence"))
+        }
     }
 }

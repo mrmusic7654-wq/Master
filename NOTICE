@@ -1,0 +1,43 @@
+Master Control
+Copyright 2026 Master Control contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Master Control is an independent administration app for a Telegram-based media
+library. It is not affiliated with, endorsed by, or sponsored by Telegram, and it
+does not use Telegram branding or artwork. The app icon and name are original.
+
+---------------------------------------------------------------------------
+Vendored third-party source
+---------------------------------------------------------------------------
+
+TDLib (Telegram Database Library)
+  Location in this repository : third_party/tdlib
+  Version                     : 1.8.67 (pinned; see scripts/build-tdlib.sh)
+  Upstream                    : https://github.com/tdlib/td
+  License                     : Boost Software License 1.0
+  License text                : third_party/tdlib/LICENSE_1_0.txt
+  Copyright                   : Copyright (c) Telegram Inc. and TDLib authors
+
+  TDLib is the Telegram engine Master Control talks to. It is distributed as
+  source and compiled by scripts/build-tdlib.sh into libtdjson.so; no prebuilt
+  TDLib binary is checked in. Only the JSON interface (tdjson) is used, reached
+  through a single JNI bridge (telegram/src/main/java/.../TdJsonJni.kt).
+
+OpenSSL
+  Version                     : OpenSSL_1_1_1w (built by TDLib's own script)
+  Upstream                    : https://www.openssl.org
+  License                     : Apache License 2.0 (OpenSSL 1.1.1 and later)
+  Note                        : Built at TDLib build time, not vendored in git.
+
+---------------------------------------------------------------------------
+Binary dependencies
+---------------------------------------------------------------------------
+
+All Kotlin/Android libraries are declared with pinned versions in
+gradle/libs.versions.toml. Their licenses, upstream URLs and the reason each one
+is used are listed in THIRD_PARTY_LICENSES.md.
+
+Master Control re-implements no part of the MTProto protocol and contains no
+hand-written Telegram cryptography; all Telegram protocol work is performed by
+TDLib.

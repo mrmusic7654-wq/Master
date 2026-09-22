@@ -36,6 +36,11 @@ class QueueUploadUseCase @Inject constructor(
             channelRepository.getChannelByDefault()
                 ?: throw AppError.NotFoundError("No storage channel is selected. Configure a channel first.")
         }
+        if (!channel.enabled) {
+            throw AppError.ValidationError(
+                "\"${channel.displayName}\" is disabled for uploads. Enable it or choose another channel.",
+            )
+        }
         if (!channel.permissions.canUploadVideos) {
             throw AppError.TelegramPermissionError(
                 missingPermission = "post messages",

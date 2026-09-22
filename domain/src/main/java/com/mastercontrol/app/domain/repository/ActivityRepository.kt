@@ -11,6 +11,9 @@ interface ActivityRepository {
 
     fun observeByType(type: ActivityType?): Flow<List<ActivityLogEntry>>
 
+    /** History of one video (imports, uploads, replacements, mapping checks). */
+    fun observeForVideo(videoId: String, limit: Int = 100): Flow<List<ActivityLogEntry>>
+
     /** Snapshot of the most recent rows (used outside collectors). */
     suspend fun getRecentSnapshot(limit: Int = 50): List<ActivityLogEntry>
 

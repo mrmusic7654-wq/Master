@@ -121,6 +121,18 @@ sealed class AppError(
         cause: Throwable? = null,
     ) : AppError(userMessage, cause)
 
+    /**
+     * An operation was refused because its preconditions are not met.
+     *
+     * Used for guard rails that protect the catalog (for example: a disabled
+     * channel cannot be the default upload target). The message tells the
+     * operator exactly what to do next.
+     */
+    class ValidationError(
+        override val userMessage: String,
+        cause: Throwable? = null,
+    ) : AppError(userMessage, cause)
+
     class ChannelNotFoundError(
         detail: String = "Channel not found.",
         cause: Throwable? = null,

@@ -34,8 +34,12 @@ android {
 
 dependencies {
     implementation(project(":domain"))
-    implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
+    // `api`, not `implementation`: this module's public surface *is* Room types
+    // (MasterControlDatabase extends RoomDatabase, DAOs are @Dao interfaces), and
+    // :data calls androidx.room.withTransaction on them. Keeping Room private
+    // here would break consumers' compile classpath.
+    api(libs.room.runtime)
+    api(libs.room.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.javax.inject)
 

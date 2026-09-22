@@ -2,7 +2,6 @@ package com.mastercontrol.app.domain.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.time.Instant
 
 /**
  * Catalog representation designed for the future Streamer application and for
@@ -76,16 +75,3 @@ data class ImportPreview(
 )
 
 enum class ImportMode { MERGE, REPLACE_CONFLICTS }
-
-/** Library query used by the search/filter/sort bar. */
-data class LibraryQuery(
-    val text: String = "",
-    val categoryId: Long? = null,
-    val folderId: Long? = null,
-    val status: VideoStatus? = null,
-    val tag: String? = null,
-    val sort: LibrarySort = LibrarySort.DATE_ADDED_DESC,
-) {
-    val hasActiveFilter: Boolean
-        get() = text.isNotBlank() || categoryId != null || folderId != null || status != null || tag != null
-}

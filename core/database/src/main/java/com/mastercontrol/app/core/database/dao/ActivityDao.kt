@@ -15,6 +15,9 @@ interface ActivityDao {
     @Query("SELECT * FROM activity_log WHERE (:type IS NULL OR type = :type) ORDER BY activityId DESC LIMIT :limit")
     fun observeFiltered(type: String?, limit: Int): Flow<List<ActivityEntity>>
 
+    @Query("SELECT * FROM activity_log WHERE relatedVideoId = :videoId ORDER BY activityId DESC LIMIT :limit")
+    fun observeForVideo(videoId: String, limit: Int): Flow<List<ActivityEntity>>
+
     @Query("SELECT * FROM activity_log ORDER BY activityId DESC LIMIT :limit")
     suspend fun recentSnapshot(limit: Int): List<ActivityEntity>
 

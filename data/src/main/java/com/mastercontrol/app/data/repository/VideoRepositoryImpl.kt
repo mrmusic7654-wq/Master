@@ -49,6 +49,9 @@ class VideoRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun observeAllTags(): Flow<List<String>> =
+        videoDao().observeAllTags().map { rows -> rows.map { it.tag }.distinct().sorted() }
+
     override fun observeVideo(videoId: String): Flow<Video?> {
         val videoFlow = videoDao().observeVideo(videoId).map { it?.toDomain(emptyList()) }
         val tagsFlow = videoDao().observeAllTags()
@@ -166,6 +169,18 @@ class VideoRepositoryImpl @Inject constructor(
             remoteDeletedCount = allMappings.count { it.mappingStatus == MappingStatus.REMOTE_DELETED.name },
         )
     }
+
+    override suspend fun countVideosByCategory(): Map<Long, Int> =
+        videoDao().countByCategory().associate { it.ownerId to it.count }
+
+    override suspend fun countVideosByFolder(): Map<Long, Int> =
+        videoDao().countByFolder().associate { it.ownerId to it.count }
+
+    override suspend fun countActiveMappingsByChannel(): Map<Long, Int> =
+        videoDao().countActiveMappingsByChannel().associate { it.ownerId to it.count }
+
+    override suspend fun activeMappingBytesByChannel(): Map<Long, Long> =
+        videoDao().sumActiveMappingBytesByChannel().associate { it.ownerId to it.total }
 
     override suspend fun countVideos(): Long = videoDao().countVideos()
 

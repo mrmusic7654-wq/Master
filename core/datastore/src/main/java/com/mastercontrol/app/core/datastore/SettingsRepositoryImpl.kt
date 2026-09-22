@@ -34,20 +34,20 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun getSettings(): AppSettings = dataStore.data.map { it.toAppSettings() }.first()
 
-    override suspend fun setThemeMode(mode: ThemeMode) = edit { it[Keys.THEME] = mode.name }
-    override suspend fun setDynamicColor(enabled: Boolean) = edit { it[Keys.DYNAMIC_COLOR] = enabled }
-    override suspend fun setLibraryLayout(layout: LibraryLayout) = edit { it[Keys.LAYOUT] = layout.name }
-    override suspend fun setLibrarySort(sort: LibrarySort) = edit { it[Keys.SORT] = sort.name }
-    override suspend fun setUploadNetworkRule(rule: UploadNetworkRule) = edit { it[Keys.NETWORK_RULE] = rule.name }
-    override suspend fun setAllowUploadsOnlyWhileCharging(enabled: Boolean) = edit { it[Keys.CHARGING_ONLY] = enabled }
-    override suspend fun setMaxConcurrentUploads(count: Int) = edit { it[Keys.MAX_CONCURRENT] = count.coerceIn(1, 4) }
-    override suspend fun setThumbnailQualityEnabledStandard(standard: Boolean) = edit { it[Keys.THUMB_STANDARD] = standard }
-    override suspend fun setThumbnailCaptureMs(ms: Long) = edit { it[Keys.THUMB_CAPTURE_MS] = ms }
-    override suspend fun setCaptionIncludesVideoId(enabled: Boolean) = edit { it[Keys.CAPTION_VIDEO_ID] = enabled }
-    override suspend fun setMediaHashingEnabled(enabled: Boolean) = edit { it[Keys.MEDIA_HASHING] = enabled }
-    override suspend fun setAutoDeleteLocalCopyAfterUpload(enabled: Boolean) = edit { it[Keys.AUTO_DELETE_COPY] = enabled }
+    override suspend fun setThemeMode(mode: ThemeMode) = edit { prefs -> prefs[Keys.THEME] = mode.name }
+    override suspend fun setDynamicColor(enabled: Boolean) = edit { prefs -> prefs[Keys.DYNAMIC_COLOR] = enabled }
+    override suspend fun setLibraryLayout(layout: LibraryLayout) = edit { prefs -> prefs[Keys.LAYOUT] = layout.name }
+    override suspend fun setLibrarySort(sort: LibrarySort) = edit { prefs -> prefs[Keys.SORT] = sort.name }
+    override suspend fun setUploadNetworkRule(rule: UploadNetworkRule) = edit { prefs -> prefs[Keys.NETWORK_RULE] = rule.name }
+    override suspend fun setAllowUploadsOnlyWhileCharging(enabled: Boolean) = edit { prefs -> prefs[Keys.CHARGING_ONLY] = enabled }
+    override suspend fun setMaxConcurrentUploads(count: Int) = edit { prefs -> prefs[Keys.MAX_CONCURRENT] = count.coerceIn(1, 4) }
+    override suspend fun setThumbnailQualityEnabledStandard(standard: Boolean) = edit { prefs -> prefs[Keys.THUMB_STANDARD] = standard }
+    override suspend fun setThumbnailCaptureMs(ms: Long) = edit { prefs -> prefs[Keys.THUMB_CAPTURE_MS] = ms }
+    override suspend fun setCaptionIncludesVideoId(enabled: Boolean) = edit { prefs -> prefs[Keys.CAPTION_VIDEO_ID] = enabled }
+    override suspend fun setMediaHashingEnabled(enabled: Boolean) = edit { prefs -> prefs[Keys.MEDIA_HASHING] = enabled }
+    override suspend fun setAutoDeleteLocalCopyAfterUpload(enabled: Boolean) = edit { prefs -> prefs[Keys.AUTO_DELETE_COPY] = enabled }
 
-    private suspend fun edit(block: MutablePreferences.() -> Unit) {
+    private suspend fun edit(block: (MutablePreferences) -> Unit) {
         dataStore.edit { prefs -> block(prefs) }
     }
 
