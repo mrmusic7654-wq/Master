@@ -3,6 +3,8 @@ description: >-
   Resolves the Android SDK on the runner and installs the packages this project
   needs. Uses the preinstalled SDK when there is one and falls back to Google's
   commandline-tools, so the build does not depend on a third-party setup action.
+  Everything it does is captured to ci-diagnostics/sdk-setup.log so a failure
+  here is diagnosable from the pull request, not only from runner logs.
 
 inputs:
   packages:
@@ -28,53 +30,73 @@ runs:
         NDK_VERSION: ${{ inputs.ndk-version }}
         CMAKE_VERSION: ${{ inputs.cmake-version }}
       run: |
-        set -euo pipefail
+        set -uo pipefail
+        mkdir -p "$GITHUB_WORKSPACE/ci-diagnostics"
+        LOG="$GITHUB_WORKSPACE/ci-diagnostics/sdk-setup.log"
 
-        # 1. Where is the SDK? GitHub's Linux runner images ship one; if this
-        #    runs elsewhere, fall back to a directory we create ourselves.
-        SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-        if [[ -z "$SDK" || ! -d "$SDK" ]]; then
-          for candidate in /usr/local/lib/android/sdk "$HOME/Android/Sdk" "$HOME/android-sdk"; do
-            if [[ -d "$candidate" ]]; then SDK="$candidate"; break; fi
+        main() {
+          set -euo pipefail
+
+          # 1. Where is the SDK? GitHub's Linux runner images ship one; if this
+          #    runs elsewhere, fall back to a directory we create ourselves.
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "$SDK" || ! -d "$SDK" ]]; then
+            for candidate in /usr/local/lib/android/sdk "$HOME/Android/Sdk" "$HOME/android-sdk"; do
+              if [[ -d "$candidate" ]]; then SDK="$candidate"; break; fi
+            done
+          fi
+          if [[ -z "$SDK" ]]; then SDK="$HOME/android-sdk"; fi
+          mkdir -p "$SDK"
+          echo "SDK root: $SDK"
+
+          # 2. Find sdkmanager, or install commandline-tools from Google.
+          SM=""
+          for candidate in "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+                           "$(command -v sdkmanager 2>/dev/null || true)"; do
+            if [[ -n "$candidate" && -x "$candidate" ]]; then SM="$candidate"; break; fi
           done
+          if [[ -z "$SM" ]]; then
+            echo "No sdkmanager in $SDK — installing commandline-tools"
+            curl -fsSL --retry 3 -o /tmp/commandlinetools.zip \
+              "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+            rm -rf /tmp/cmdline-tools-unpack "$SDK/cmdline-tools"
+            mkdir -p "$SDK/cmdline-tools"
+            unzip -q /tmp/commandlinetools.zip -d /tmp/cmdline-tools-unpack
+            mv /tmp/cmdline-tools-unpack/cmdline-tools "$SDK/cmdline-tools/latest"
+            SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "sdkmanager: $SM"
+
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$(dirname "$SM")" >> "$GITHUB_PATH"
+
+          # 3. Licences are accepted non-interactively; already-accepted
+          #    licences make this a no-op, so a failure is not fatal.
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+
+          # 4. Install exactly what this project pins — nothing else.
+          #    (if-blocks, not `[[ … ]] && …`: the latter aborts the script
+          #    under `set -e` whenever the condition is false.)
+          read -r -a WANTED <<< "$PACKAGES"
+          if [[ -n "$NDK_VERSION" ]]; then
+            WANTED+=("ndk;$NDK_VERSION")
+          fi
+          if [[ -n "$CMAKE_VERSION" ]]; then
+            WANTED+=("cmake;$CMAKE_VERSION")
+          fi
+          echo "installing: ${WANTED[*]}"
+          yes | "$SM" --install "${WANTED[@]}"
+
+          # 5. local.properties is what AGP reads; ANDROID_HOME alone also works,
+          #    but writing it keeps the build identical to a developer machine.
+          echo "sdk.dir=$SDK" > "$GITHUB_WORKSPACE/local.properties"
+          echo "SDK ready at $SDK"
+        }
+
+        main 2>&1 | tee -a "$LOG"
+        status="${PIPESTATUS[0]}"
+        if [[ "$status" -ne 0 ]]; then
+          echo "Android SDK setup failed with status $status (log: $LOG)" >&2
         fi
-        [[ -n "$SDK" ]] || SDK="$HOME/android-sdk"
-        mkdir -p "$SDK"
-
-        # 2. Find sdkmanager, or install commandline-tools from Google.
-        SM=""
-        for candidate in "$SDK/cmdline-tools/latest/bin/sdkmanager" \
-                         "$(command -v sdkmanager 2>/dev/null || true)"; do
-          if [[ -n "$candidate" && -x "$candidate" ]]; then SM="$candidate"; break; fi
-        done
-        if [[ -z "$SM" ]]; then
-          echo "No sdkmanager in $SDK — installing commandline-tools"
-          curl -fsSL --retry 3 -o /tmp/commandlinetools.zip \
-            "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
-          rm -rf /tmp/cmdline-tools-unpack "$SDK/cmdline-tools"
-          mkdir -p "$SDK/cmdline-tools"
-          unzip -q /tmp/commandlinetools.zip -d /tmp/cmdline-tools-unpack
-          mv /tmp/cmdline-tools-unpack/cmdline-tools "$SDK/cmdline-tools/latest"
-          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
-        fi
-
-        echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-        echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-        echo "$(dirname "$SM")" >> "$GITHUB_PATH"
-        echo "sdkmanager: $SM"
-
-        # 3. Licences are accepted non-interactively; a failure here is not fatal
-        #    because already-accepted licences make it a no-op.
-        yes | "$SM" --licenses > /dev/null 2>&1 || true
-
-        # 4. Install exactly what this project pins — nothing else.
-        read -r -a WANTED <<< "$PACKAGES"
-        [[ -n "$NDK_VERSION" ]]   && WANTED+=("ndk;$NDK_VERSION")
-        [[ -n "$CMAKE_VERSION" ]] && WANTED+=("cmake;$CMAKE_VERSION")
-        echo "installing: ${WANTED[*]}"
-        yes | "$SM" --install "${WANTED[@]}"
-
-        # 5. local.properties is what AGP reads; ANDROID_HOME alone also works,
-        #    but writing it keeps the build identical to a developer machine.
-        echo "sdk.dir=$SDK" > "$GITHUB_WORKSPACE/local.properties"
-        echo "SDK ready at $SDK"
+        exit "$status"

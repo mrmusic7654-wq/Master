@@ -18,6 +18,9 @@ captures/
 # Native build outputs (produced by scripts/build-tdlib.sh, never committed)
 telegram/src/main/jniLibs/
 
+# CI diagnostics captured by .github/actions (posted to the PR on failure)
+ci-diagnostics/
+
 # Local-only diagnostics / scratch
 *.hprof
 /diagnostics/

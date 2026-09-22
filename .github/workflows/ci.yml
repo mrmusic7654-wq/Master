@@ -141,23 +141,39 @@ jobs:
 
       # Runner logs are not reachable from every environment; the digest puts the
       # actual compiler output where a reviewer (or an agent) can read it.
+      # Runner logs are not downloadable from every environment, so the failure
+      # digest travels with the pull request instead.
       - name: Post failure digest to the pull request
         if: failure() && github.event_name == 'pull_request'
+        continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${ github.token }
         run: |
+          touch gradle-test.log gradle-lint.log
           {
-            echo "### :x: \`Unit tests & lint\` — compiler/lint digest"
+            echo "### :x: \`Unit tests & lint\` failed"
             echo
-            echo '```'
-            cat gradle-*.log 2>/dev/null \
-              | grep -E "^e: |^w: |error:|FAILURE:|Caused by:|> Task .* FAILED|Execution failed|What went wrong|unresolved reference|cannot access|Duplicate|Kotlin could not" \
-              | head -150
-            echo '```'
+            if ls ci-diagnostics/*.log >/dev/null 2>&1; then
+              echo "<details><summary>setup diagnostics</summary>"
+              echo
+              echo '\`\`\`'
+              tail -60 ci-diagnostics/*.log
+              echo '\`\`\`'
+              echo
+              echo "</details>"
+              echo
+            fi
+            echo '\`\`\`'
+            if grep -hE "^e: |error:|FAILURE:|Caused by:|> Task .* FAILED|Execution failed|What went wrong|unresolved reference|cannot access|Duplicate class|Kotlin could not" gradle-test.log gradle-lint.log | head -150; then
+              :
+            else
+              echo "(no captured output matched — the job failed before this step's command ran; see the step list and the setup diagnostics above)"
+            fi
+            echo '\`\`\`'
             echo
-            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "Run: ${ github.server_url }/${ github.repository }/actions/runs/${ github.run_id }"
           } > digest.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file digest.md
+          gh pr comment "${ github.event.pull_request.number }" --body-file digest.md || true
 
       - name: Upload test & lint reports
         if: always()
@@ -204,23 +220,39 @@ jobs:
           set -o pipefail
           ./gradlew --stacktrace :app:assembleDebug :app:assembleRelease 2>&1 | tee gradle-assemble.log
 
+      # Runner logs are not downloadable from every environment, so the failure
+      # digest travels with the pull request instead.
       - name: Post failure digest to the pull request
         if: failure() && github.event_name == 'pull_request'
+        continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${ github.token }
         run: |
+          touch gradle-assemble.log
           {
-            echo "### :x: \`Assemble debug & release\` — compiler digest"
+            echo "### :x: \`Assemble debug & release\` failed"
             echo
-            echo '```'
-            cat gradle-assemble.log 2>/dev/null \
-              | grep -E "^e: |error:|FAILURE:|Caused by:|> Task .* FAILED|Execution failed|What went wrong|unresolved reference|cannot access|Duplicate|AAPT|aapt2" \
-              | head -150
-            echo '```'
+            if ls ci-diagnostics/*.log >/dev/null 2>&1; then
+              echo "<details><summary>setup diagnostics</summary>"
+              echo
+              echo '\`\`\`'
+              tail -60 ci-diagnostics/*.log
+              echo '\`\`\`'
+              echo
+              echo "</details>"
+              echo
+            fi
+            echo '\`\`\`'
+            if grep -hE "^e: |error:|FAILURE:|Caused by:|> Task .* FAILED|Execution failed|What went wrong|unresolved reference|cannot access|Duplicate class|AAPT|aapt2" gradle-assemble.log | head -150; then
+              :
+            else
+              echo "(no captured output matched — the job failed before this step's command ran; see the step list and the setup diagnostics above)"
+            fi
+            echo '\`\`\`'
             echo
-            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "Run: ${ github.server_url }/${ github.repository }/actions/runs/${ github.run_id }"
           } > digest.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file digest.md
+          gh pr comment "${ github.event.pull_request.number }" --body-file digest.md || true
 
       - name: Verify the debug APK has no native libraries baked in from git
         run: |
@@ -331,29 +363,39 @@ jobs:
           set -o pipefail
           ./scripts/build-tdlib.sh --include-x86-64 2>&1 | tee tdlib-build.log
 
+      # Runner logs are not downloadable from every environment, so the failure
+      # digest travels with the pull request instead.
       - name: Post failure digest to the pull request
         if: failure() && github.event_name == 'pull_request'
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${ github.token }
         run: |
           touch tdlib-build.log
           {
             echo "### :x: \`Build TDLib (native)\` failed"
             echo
-            echo '```'
-            grep -hnE "error:|CMake Error|ninja: build stopped|fatal error|FAILED|ERROR:" tdlib-build.log | tail -60 || true
-            echo '```'
+            if ls ci-diagnostics/*.log >/dev/null 2>&1; then
+              echo "<details><summary>setup diagnostics</summary>"
+              echo
+              echo '\`\`\`'
+              tail -60 ci-diagnostics/*.log
+              echo '\`\`\`'
+              echo
+              echo "</details>"
+              echo
+            fi
+            echo '\`\`\`'
+            if grep -hE "error:|CMake Error|ninja: build stopped|fatal error|FAILED|ERROR:" tdlib-build.log | head -150; then
+              :
+            else
+              echo "(no captured output matched — the job failed before this step's command ran; see the step list and the setup diagnostics above)"
+            fi
+            echo '\`\`\`'
             echo
-            echo "Last 60 lines:"
-            echo
-            echo '```'
-            tail -60 tdlib-build.log || echo "(no build output captured — the job failed before the build started)"
-            echo '```'
-            echo
-            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "Run: ${ github.server_url }/${ github.repository }/actions/runs/${ github.run_id }"
           } > digest.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file digest.md || true
+          gh pr comment "${ github.event.pull_request.number }" --body-file digest.md || true
 
       - name: Show the build manifest
         run: cat telegram/src/main/jniLibs/BUILD-INFO.txt
