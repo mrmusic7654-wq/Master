@@ -116,17 +116,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
-        run: |
-          sdkmanager --install "platforms;android-${COMPILE_SDK}" "build-tools;${BUILD_TOOLS}" "platform-tools"
+        uses: ./.github/actions/setup-android-sdk
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -190,17 +186,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
-        run: |
-          sdkmanager --install "platforms;android-${COMPILE_SDK}" "build-tools;${BUILD_TOOLS}" "platform-tools"
+        uses: ./.github/actions/setup-android-sdk
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -309,18 +301,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Set up Android SDK, NDK and CMake
+        uses: ./.github/actions/setup-android-sdk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          cmake-version: ${{ env.CMAKE_VERSION }}
 
-      - name: Install NDK, CMake and host build tools
+      - name: Install TDLib host build tools
         run: |
-          sdkmanager --install "platforms;android-${COMPILE_SDK}" "build-tools;${BUILD_TOOLS}" \
-                     "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
           sudo apt-get update
           sudo apt-get install -y ninja-build gperf php-cli perl make unzip
 
@@ -340,25 +333,27 @@ jobs:
 
       - name: Post failure digest to the pull request
         if: failure() && github.event_name == 'pull_request'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          touch tdlib-build.log
           {
-            echo "### :x: \`Build TDLib (native)\` — digest"
+            echo "### :x: \`Build TDLib (native)\` failed"
             echo
             echo '```'
-            grep -nE "error:|Error|FAILED|failed|CMake Error|ninja: build stopped|fatal|ERROR" tdlib-build.log 2>/dev/null | tail -80
+            grep -hnE "error:|CMake Error|ninja: build stopped|fatal error|FAILED|ERROR:" tdlib-build.log | tail -60 || true
             echo '```'
             echo
             echo "Last 60 lines:"
             echo
             echo '```'
-            tail -60 tdlib-build.log 2>/dev/null
+            tail -60 tdlib-build.log || echo "(no build output captured — the job failed before the build started)"
             echo '```'
             echo
             echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > digest.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file digest.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file digest.md || true
 
       - name: Show the build manifest
         run: cat telegram/src/main/jniLibs/BUILD-INFO.txt
@@ -391,18 +386,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
-        run: |
-          sdkmanager --install "platforms;android-${COMPILE_SDK}" "build-tools;${BUILD_TOOLS}" \
-                     "platform-tools" "emulator" "system-images;android-${{ matrix.api-level }};google_apis;x86_64"
+        uses: ./.github/actions/setup-android-sdk
+        with:
+          packages: >-
+            platforms;android-35 build-tools;35.0.0 platform-tools emulator
+            system-images;android-${{ matrix.api-level }};google_apis;x86_64
 
       - name: Restore the native libraries
         uses: actions/download-artifact@v4
