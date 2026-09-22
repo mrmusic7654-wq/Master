@@ -86,7 +86,11 @@ runs:
             WANTED+=("cmake;$CMAKE_VERSION")
           fi
           echo "installing: ${WANTED[*]}"
-          yes | "$SM" --install "${WANTED[@]}"
+          # sdkmanager does not prompt during package installation once the
+          # licences have been accepted. Avoid `yes | …` here: with pipefail,
+          # sdkmanager's normal early exit gives yes SIGPIPE and falsely fails
+          # the whole setup step.
+          "$SM" --install "${WANTED[@]}"
 
           # 5. local.properties is what AGP reads; ANDROID_HOME alone also works,
           #    but writing it keeps the build identical to a developer machine.

@@ -146,8 +146,8 @@ jobs:
         if: failure()
         uses: ./.github/actions/publish-failure-logs
         with:
-          job-slug: Unit tests & lint
-          title: unit-tests
+          job-slug: unit-tests
+          title: Unit tests & lint
 
       - name: Upload test & lint reports
         if: always()
@@ -200,8 +200,8 @@ jobs:
         if: failure()
         uses: ./.github/actions/publish-failure-logs
         with:
-          job-slug: Assemble debug & release
-          title: assemble
+          job-slug: assemble
+          title: Assemble debug & release
 
       - name: Verify the debug APK has no native libraries baked in from git
         run: |
@@ -318,8 +318,8 @@ jobs:
         if: failure()
         uses: ./.github/actions/publish-failure-logs
         with:
-          job-slug: Build TDLib (native)
-          title: native-tdlib
+          job-slug: native-tdlib
+          title: Build TDLib (native)
 
       - name: Show the build manifest
         run: cat telegram/src/main/jniLibs/BUILD-INFO.txt
