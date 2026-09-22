@@ -47,7 +47,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setMediaHashingEnabled(enabled: Boolean) = edit { prefs -> prefs[Keys.MEDIA_HASHING] = enabled }
     override suspend fun setAutoDeleteLocalCopyAfterUpload(enabled: Boolean) = edit { prefs -> prefs[Keys.AUTO_DELETE_COPY] = enabled }
 
-    private suspend fun edit(block: MutablePreferences.() -> Unit) {
+    private suspend fun edit(block: (MutablePreferences) -> Unit) {
         dataStore.edit { prefs -> block(prefs) }
     }
 
