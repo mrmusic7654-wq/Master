@@ -3,6 +3,7 @@ package com.mastercontrol.app.telegram.tdlib.manager
 import android.content.Context
 import android.os.Build
 import com.mastercontrol.app.core.logging.Logger
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.mastercontrol.app.core.logging.Tags
 import com.mastercontrol.app.core.security.TdlibEncryptionKeyProvider
 import com.mastercontrol.app.domain.repository.TelegramCredentialsRepository
@@ -27,7 +28,7 @@ import kotlinx.coroutines.SupervisorJob
  */
 @Singleton
 class TdLibManager @Inject constructor(
-    @androidx.hilt.android.qualifiers.ApplicationContext private val context: Context,
+    @ApplicationContext private val context: Context,
     private val credentialsRepository: TelegramCredentialsRepository,
     private val keyProvider: TdlibEncryptionKeyProvider,
     private val logger: Logger,
