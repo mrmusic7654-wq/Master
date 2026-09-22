@@ -18,7 +18,7 @@ Master Control never renders Telegram media and never re-implements Telegram.
 | --- | --- |
 | **A permanent video ID** (`VID-000001`) identifies a title forever | IDs come from a single transactional counter (`video_id_counter`); they are never reused, never rewritten, and survive replacement of the underlying media |
 | **ID → channel → message → media is always recorded** | `telegram_mappings` holds exactly one active mapping per video; the mapping is committed atomically with the video status and the finished upload task |
-| **Telegram work is done by TDLib** | No MTProto, no hand-written Telegram crypto, no fake API. TDLib 1.8.67 is vendored as source and compiled to `libtdjson.so` (`scripts/build-tdlib.sh`); Kotlin code talks to it through one JNI bridge behind interfaces |
+| **Telegram work is done by TDLib** | No MTProto, no hand-written Telegram crypto, no fake API. TDLib 1.8.67 is vendored as source and compiled to `libtdjson.so`; the checked-in JNI bridge is compiled to `libtdjson_bridge.so` by `scripts/build-tdlib.sh`; Kotlin talks to it through domain interfaces |
 | **API credentials are runtime BYOK** | `api_id` / `api_hash` are entered in the app, validated, and stored AES-GCM encrypted with an Android Keystore key. Nothing is hard-coded; no rebuild is needed to change them |
 | **Uploads survive everything** | The queue lives in Room, runs in a WorkManager foreground service, reports only real byte counters, retries with bounded exponential backoff, and is re-claimed after process death |
 | **No fabricated state** | No demo data, no placeholder screens, no invented progress, no estimated quotas the app cannot read. Unknown values render as `—` |

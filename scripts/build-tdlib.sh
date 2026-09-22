@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Builds TDLib (vendored at third_party/tdlib) into libtdjson.so for the ABIs
-# Master Control ships, and installs the result into telegram/src/main/jniLibs.
+# Builds TDLib (vendored at third_party/tdlib) and Master Control's JNI bridge
+# for the ABIs the app ships, then installs libtdjson.so and
+# libtdjson_bridge.so into telegram/src/main/jniLibs.
 #
 # Why this script exists
 # ----------------------
@@ -45,6 +46,7 @@ ANDROID_PLATFORM="android-26"   # == minSdk
 ANDROID_STL="c++_static"
 OPENSSL_VERSION="OpenSSL_1_1_1w"
 SDK_CMAKE_VERSION="3.22.1"
+API_LEVEL="${ANDROID_PLATFORM#android-}"
 
 ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 OPENSSL_DIR=""
@@ -113,8 +115,13 @@ case "$(uname -s)" in
   Linux)  HOST_ARCH="linux-x86_64" ;;
   *)      fail "unsupported host OS: $(uname -s)" ;;
 esac
-STRIP="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$HOST_ARCH/bin/llvm-strip"
+NDK_TOOLCHAIN_BIN="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$HOST_ARCH/bin"
+SYSROOT="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$HOST_ARCH/sysroot"
+STRIP="$NDK_TOOLCHAIN_BIN/llvm-strip"
+CLANG="$NDK_TOOLCHAIN_BIN/clang"
 [[ -x "$STRIP" ]] || fail "llvm-strip not found at $STRIP"
+[[ -x "$CLANG" ]] || fail "Android clang not found at $CLANG"
+[[ -f "$SYSROOT/usr/include/jni.h" ]] || fail "JNI headers not found under $SYSROOT/usr/include"
 info "NDK $NDK_VERSION at $ANDROID_NDK_ROOT"
 
 if [[ "$DO_CLEAN" == "1" ]]; then
@@ -151,6 +158,38 @@ if [[ ! -d "$GEN_DIR" ]]; then
   ( cd "$GEN_DIR" && cmake -DTD_ANDROID_JSON=ON -DTD_GENERATE_SOURCE_FILES=ON "$TDLIB_DIR" && cmake --build . ) \
     || fail "TDLib source generation failed"
 fi
+
+android_target_for_abi() {
+  local api_level="${ANDROID_PLATFORM#android-}"
+  case "$1" in
+    arm64-v8a)    echo "aarch64-linux-android$api_level" ;;
+    armeabi-v7a)  echo "armv7a-linux-androideabi$api_level" ;;
+    x86_64)       echo "x86_64-linux-android$api_level" ;;
+    *)             fail "unsupported Android ABI for JNI bridge: $1" ;;
+  esac
+}
+
+build_jni_bridge() {
+  local abi="$1"
+  local dest="$2"
+  local target
+  target="$(android_target_for_abi "$abi")"
+  info "Building JNI bridge for $abi"
+  "$CLANG" \
+    --target="$target" \
+    --sysroot="$SYSROOT" \
+    -D__ANDROID_API__="$API_LEVEL" \
+    -fPIC \
+    -shared \
+    -O2 \
+    -I"$SYSROOT/usr/include" \
+    -I"$SYSROOT/usr/include/linux" \
+    "$REPO_ROOT/telegram/src/main/jni/tdjson_bridge.c" \
+    -Wl,-soname,libtdjson_bridge.so \
+    -ldl \
+    -o "$dest/libtdjson_bridge.so"
+  "$STRIP" --strip-debug --strip-unneeded "$dest/libtdjson_bridge.so"
+}
 
 for abi in "${ABIS[@]}"; do
   abi_dir="$BUILD_ROOT/build-$abi"
@@ -191,6 +230,12 @@ for abi in "${ABIS[@]}"; do
     || fail "llvm-strip failed for $abi"
   rm -f "$dest_dir/libtdjson.so.debug"
 
+  # The Kotlin layer loads a small JNI library in addition to TDLib itself.
+  # TDLib's upstream build produces libtdjson.so, but it cannot know about
+  # Master Control's JNI surface, so compile the checked-in bridge here and
+  # install both libraries into the APK's jniLibs directory.
+  build_jni_bridge "$abi" "$dest_dir"
+
   if [[ -e "$OPENSSL_DIR/$abi/lib/libcrypto.so" ]]; then
     cp -f "$OPENSSL_DIR/$abi/lib/libcrypto.so" "$OPENSSL_DIR/$abi/lib/libssl.so" "$dest_dir/"
     "$STRIP" "$dest_dir/libcrypto.so" "$dest_dir/libssl.so"
@@ -216,11 +261,13 @@ MANIFEST="$JNI_OUTPUT/BUILD-INFO.txt"
   echo ""
   echo "checksums:"
   for abi in "${ABIS[@]}"; do
-    if command -v sha256sum >/dev/null 2>&1; then
-      echo "  $abi/libtdjson.so $(sha256sum "$JNI_OUTPUT/$abi/libtdjson.so" | awk '{print $1}')"
-    elif command -v shasum >/dev/null 2>&1; then
-      echo "  $abi/libtdjson.so $(shasum -a 256 "$JNI_OUTPUT/$abi/libtdjson.so" | awk '{print $1}')"
-    fi
+    for library in libtdjson.so libtdjson_bridge.so; do
+      if command -v sha256sum >/dev/null 2>&1; then
+        echo "  $abi/$library $(sha256sum "$JNI_OUTPUT/$abi/$library" | awk '{print $1}')"
+      elif command -v shasum >/dev/null 2>&1; then
+        echo "  $abi/$library $(shasum -a 256 "$JNI_OUTPUT/$abi/$library" | awk '{print $1}')"
+      fi
+    done
   done
 } > "$MANIFEST"
 

@@ -3,8 +3,10 @@
 Everything needed to produce a working APK/AAB, including the native TDLib
 libraries. There are two independent halves:
 
-* **TDLib (native)** — compiled from `third_party/tdlib` into `libtdjson.so`.
-  Needed on the device, **not** needed to compile or unit-test the Kotlin code.
+* **TDLib (native)** — compiled from `third_party/tdlib` into `libtdjson.so`,
+  with the checked-in JNI bridge compiled into `libtdjson_bridge.so`.
+  Both are needed on the device, but native libraries are **not** needed to
+  compile or unit-test the Kotlin code.
 * **Master Control (Kotlin/Gradle)** — the app, its modules and its tests.
 
 ---
@@ -40,12 +42,14 @@ What it does, in order:
 3. Configures TDLib with `ANDROID_STL=c++_static`, `ANDROID_PLATFORM=android-26`
    (= `minSdk`), `CMAKE_BUILD_TYPE=RelWithDebInfo`, `-DTD_ANDROID_JSON=ON`,
    Ninja generator, pointing `OPENSSL_ROOT_DIR` at the OpenSSL built in step 2.
-4. Builds only the **`tdjson`** target — the JSON interface Master Control's JNI
-   bridge talks to. No C++ client library, no JNI glue beyond that.
-5. Strips the result (`llvm-strip --strip-debug --strip-unneeded`) and installs it
-   as `telegram/src/main/jniLibs/<abi>/libtdjson.so`. If OpenSSL was built as
-   shared libraries, `libcrypto.so` and `libssl.so` are copied and stripped into
-   the same directory so the loader finds them.
+4. Builds only the **`tdjson`** target — the JSON interface Master Control's
+   JNI bridge talks to. No C++ client library is packaged.
+5. Strips the TDLib result (`llvm-strip --strip-debug --strip-unneeded`),
+   compiles `telegram/src/main/jni/tdjson_bridge.c` with the Android NDK, and
+   installs both libraries as `telegram/src/main/jniLibs/<abi>/libtdjson.so`
+   and `libtdjson_bridge.so`. If OpenSSL was built as shared libraries,
+   `libcrypto.so` and `libssl.so` are copied and stripped into the same directory
+   so the loader finds them.
 6. Writes `telegram/src/main/jniLibs/BUILD-INFO.txt` recording TDLib version,
    OpenSSL version, NDK version, build date, flags and **sha256** of each `.so`.
 
@@ -65,7 +69,8 @@ Those are the only accepted arguments — anything else fails fast with the usag
 text. Stripping is not configurable: the packaged `.so` is always stripped, and
 the unstripped copy used to produce it is deleted after the strip succeeds (keep
 it yourself if you want symbols for native crash triage: build once with
-`--openssl-dir` and copy `build/tdlib/<abi>/td/libtdjson.so` aside).
+`--openssl-dir` and copy `build/tdlib/<abi>/td/libtdjson.so` aside). The JNI
+bridge is rebuilt from `telegram/src/main/jni/tdjson_bridge.c` on every run.
 
 Default ABIs are **`arm64-v8a` and `armeabi-v7a`**, matching
 `telegram/build.gradle.kts`. `x86_64` is opt-in on both sides:

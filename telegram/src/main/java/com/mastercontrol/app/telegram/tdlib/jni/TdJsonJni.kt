@@ -10,6 +10,9 @@ package com.mastercontrol.app.telegram.tdlib.jni
 object TdJsonJni {
 
     init {
+        // The bridge resolves TDLib's JSON symbols with dlsym, so TDLib must
+        // be loaded first and made visible to the process linker namespace.
+        System.loadLibrary("tdjson")
         System.loadLibrary("tdjson_bridge")
     }
 

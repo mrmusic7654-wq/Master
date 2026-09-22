@@ -7,11 +7,11 @@
  * (td_json_client_*) which needs no code generation (no PHP/gperf required).
  *
  * Function declarations match third_party/tdlib/td/telegram/td_json_client.h.
- * The native library is built by scripts/build-tdlib.sh and packaged under
- * telegram/src/main/jniLibs/<abi>/.
+ * libtdjson_bridge.so is built by scripts/build-tdlib.sh and packaged beside
+ * libtdjson.so under telegram/src/main/jniLibs/<abi>/.
  *
- * Compiled with the Android NDK only (scripts/build-tdlib.sh); never compiled
- * by Gradle at app build time.
+ * Compiled with the Android NDK only (scripts/build-tdlib.sh); it is not
+ * compiled by Gradle at app build time.
  */
 
 #include <jni.h>
@@ -35,14 +35,23 @@ static td_set_log_message_callback_fn g_set_log_callback;
 
 static JavaVM *g_vm = NULL;
 
-/* Resolve a symbol from libtdjson.so. On Android both libraries are loaded
- * into the app linker namespace, so RTLD_DEFAULT lookup works.
+/* Resolve a symbol from libtdjson.so. Keep an explicit handle instead of
+ * relying only on RTLD_DEFAULT: Android's linker namespace can keep a library
+ * loaded with RTLD_LOCAL out of the default search scope.
  */
 #if defined(__ANDROID__)
 #include <dlfcn.h>
+static void *g_tdjson_handle = NULL;
+
 static void *resolve_symbol(const char *name) {
-    void *sym = dlsym(RTLD_DEFAULT, name);
-    return sym;
+    if (g_tdjson_handle == NULL) {
+        g_tdjson_handle = dlopen("libtdjson.so", RTLD_NOW | RTLD_LOCAL);
+    }
+    if (g_tdjson_handle != NULL) {
+        void *sym = dlsym(g_tdjson_handle, name);
+        if (sym != NULL) return sym;
+    }
+    return dlsym(RTLD_DEFAULT, name);
 }
 #else
 #error "tdjson_bridge.c must be compiled for Android (NDK)."
@@ -75,17 +84,17 @@ static void td_log_bridge(int verbosity_level, const char *message) {
 
 static jlong jni_create(JNIEnv *env, jobject thiz) {
     (void)env; (void)thiz;
-    return (jlong)(intptr_t)g_create();
+    return g_create != NULL ? (jlong)(intptr_t)g_create() : 0;
 }
 
 static void jni_destroy(JNIEnv *env, jobject thiz, jlong handle) {
     (void)env; (void)thiz;
-    if (handle != 0) g_destroy((void *)(intptr_t)handle);
+    if (handle != 0 && g_destroy != NULL) g_destroy((void *)(intptr_t)handle);
 }
 
 static void jni_send(JNIEnv *env, jobject thiz, jlong handle, jstring request) {
     (void)thiz;
-    if (handle == 0 || request == NULL) return;
+    if (handle == 0 || request == NULL || g_send == NULL) return;
     const char *utf = (*env)->GetStringUTFChars(env, request, NULL);
     if (utf != NULL) {
         g_send((void *)(intptr_t)handle, utf);
@@ -95,7 +104,7 @@ static void jni_send(JNIEnv *env, jobject thiz, jlong handle, jstring request) {
 
 static jstring jni_receive(JNIEnv *env, jobject thiz, jlong handle, jdouble timeout) {
     (void)thiz;
-    if (handle == 0) return NULL;
+    if (handle == 0 || g_receive == NULL) return NULL;
     const char *result = g_receive((void *)(intptr_t)handle, timeout);
     if (result == NULL) return NULL;
     return (*env)->NewStringUTF(env, result);
@@ -103,7 +112,7 @@ static jstring jni_receive(JNIEnv *env, jobject thiz, jlong handle, jdouble time
 
 static jstring jni_execute(JNIEnv *env, jobject thiz, jlong handle, jstring request) {
     (void)thiz;
-    if (handle == 0 || request == NULL) return NULL;
+    if (handle == 0 || request == NULL || g_execute == NULL) return NULL;
     const char *utf = (*env)->GetStringUTFChars(env, request, NULL);
     const char *result = NULL;
     if (utf != NULL) {

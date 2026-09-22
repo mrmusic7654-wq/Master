@@ -200,9 +200,11 @@ operator act.
 
 * TDLib 1.8.67 is vendored at `third_party/tdlib` and compiled by
   `scripts/build-tdlib.sh` into `libtdjson.so` for `arm64-v8a` and
-  `armeabi-v7a` (`x86_64` optional). No prebuilt binaries are committed.
+  `armeabi-v7a` (`x86_64` optional). The checked-in C shim is compiled beside it
+  as `libtdjson_bridge.so`; no prebuilt binaries are committed.
 * The **JSON interface** is used, reached through one JNI class
-  (`TdJsonJni`, native library `tdjson_bridge`) with three methods: create the
+  (`TdJsonJni`, loading `libtdjson.so` before `libtdjson_bridge.so`) with methods
+  to create the
   client, send a request, receive results on a dedicated thread.
 * `TdClientCore` owns the receive loop, request/response correlation and update
   dispatch. Feature code never sees JSON.
